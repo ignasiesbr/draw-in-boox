@@ -31,12 +31,17 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             helper = created
             // Use raw digitizer/SF rendering, excluding the SDK's AppTouchRender finger path.
             created.enableFingerTouch(false)
-            val region = view.viewport.drawingRect()
-            val limit = Rect(kotlin.math.ceil(region.left).toInt(), kotlin.math.ceil(region.top).toInt(),
-                kotlin.math.floor(region.right).toInt(), kotlin.math.floor(region.bottom).toInt())
+            val clipStarted = android.os.SystemClock.elapsedRealtime()
+            val limit = Rect().also { view.viewport.drawingRect().roundOut(it) }
             check(!limit.isEmpty) { "Canvas is outside the drawing area" }
-            created.setLimitRect(limit, emptyList())
+            // Large stepped polygon masks break raw callbacks when sent through
+            // TouchHelper, and suppress live ink when sent to EpdController directly.
+            // Use the known-working rectangular region for both paths. Bitmap clipping
+            // remains exact; hardware ink can briefly cross an angled paper edge.
+            val noExclusions = listOf(Rect(-1, -1, 0, 0))
+            created.setLimitRect(limit, noExclusions)
                 .openRawDrawing()
+            Log.i("BooxProbe", "Preview rectangular clip angle=${transform.rotationDegrees} setupMs=${android.os.SystemClock.elapsedRealtime() - clipStarted}")
             resumePreview(created)
             view.rawInput = created.isRawDrawingCreated && created.isRawDrawingInputEnabled
             val location = IntArray(2).also { view.getLocationOnScreen(it) }
@@ -92,7 +97,14 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             view.post {
                 // Do not commit a callback queued by an old mode, surface, or paused activity.
                 if (session == generation && view.inputEnabled && view.rawInput) {
-                    view.commit(samples, "boox", range)
+                    // Raw input uses the bounding rectangle; strokes starting in a gray
+                    // corner must not become artwork. The bitmap clips crossings at its edge.
+                    val first = samples.firstOrNull()
+                    val spec = view.document?.spec
+                    if (first != null && spec != null && first.x >= 0 && first.y >= 0 &&
+                        first.x < spec.width && first.y < spec.height) {
+                        view.commit(samples, "boox", range)
+                    } else view.render()
                     try {
                         helper?.let { active -> active.setRawDrawingEnabled(false); resumePreview(active) }
                     }

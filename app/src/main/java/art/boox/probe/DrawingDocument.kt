@@ -90,7 +90,7 @@ class DocumentStore(private val directory: File) {
                 val document = DrawingDocument(spec, bitmap, metadata.getString("id"), metadata.getString("layerId"))
                 val viewport = metadata.optJSONObject("viewport")?.let {
                     ViewportState(it.getDouble("scale").toFloat(), it.getDouble("centerX").toFloat(),
-                        it.getDouble("centerY").toFloat(), it.getBoolean("fit"))
+                        it.getDouble("centerY").toFloat(), it.getBoolean("fit"), it.optDouble("rotationDegrees", 0.0).toFloat())
                 }
                 return LoadedDocument(document, viewport)
             }
@@ -115,7 +115,7 @@ class DocumentStore(private val directory: File) {
             .put("width", document.spec.width).put("height", document.spec.height)
         document.spec.ppi?.let { metadata.put("ppi", it) }
         viewport?.let { metadata.put("viewport", JSONObject().put("scale", it.scale)
-            .put("centerX", it.centerX).put("centerY", it.centerY).put("fit", it.fit)) }
+            .put("centerX", it.centerX).put("centerY", it.centerY).put("fit", it.fit).put("rotationDegrees", it.rotationDegrees)) }
         val target = AtomicFile(file)
         val output = target.startWrite()
         try {

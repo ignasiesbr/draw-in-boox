@@ -8,6 +8,7 @@ Prepared and updated 2026-10-22 from the working Go 10.3 probe. Sections 1 and 2
 - **Delivered:** +/−, Fit, and 100% zoom, document/view coordinate mapping, zoom-scaled hardware preview width, and paper-region clipping. Zoom is capped at 400%; requests during a pen stroke are refused until the pen is lifted. Finger navigation is not enabled yet.
 - **Verified:** build/lint; device tests for presets/exports, invalid dimensions, migration, transforms, view resizing, persistence, existing pressure/input behavior, and selector validation. User tested button zoom and reported pen alignment works well.
 - **Next:** section 3, finger navigation. Exact hardware/bitmap brush-shape matching and a systematic orientation/edge/ghosting test matrix remain useful regression checks. Recorded-stroke replay and detailed render timing remain follow-up work, not delivered commands.
+- **View rotation addition:** arbitrary-angle viewport rotation with ±15° steps, an exact/fractional angle control, and reset is implemented. Pixels/exports keep their document orientation. Transform, clipping-mask, pen-input, persistence, and unchanged-export tests pass; the user confirmed live BOOX preview and stroke retention through zoom, accepting temporary preview spill across angled paper edges. The baseline before this addition is Git tag `baseline-before-view-rotation` (`8d85b0f`). Finger rotation gestures remain deferred.
 
 ## Original starting point before this milestone
 

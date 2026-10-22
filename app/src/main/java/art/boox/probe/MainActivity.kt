@@ -9,6 +9,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.*
+import android.text.InputType
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -22,6 +24,7 @@ class MainActivity : Activity() {
     private var preferBoox = true
     private var resumed = false
     private var strokeCount = 0
+    private var penConfigurationGeneration = 0
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -61,6 +64,12 @@ class MainActivity : Activity() {
         button(navigation, "Fit") { zoom(ZoomAction.FIT) }
         button(navigation, "100%") { zoom(ZoomAction.ACTUAL) }
         root.addView(navigation)
+        val rotation = LinearLayout(this)
+        button(rotation, "Rotate −15°") { rotateView(surface.viewport.rotationDegrees - 15f) }
+        button(rotation, "Angle…") { chooseAngle() }
+        button(rotation, "Rotate +15°") { rotateView(surface.viewport.rotationDegrees + 15f) }
+        button(rotation, "Reset angle") { rotateView(0f) }
+        root.addView(rotation)
         status = TextView(this).apply {
             textSize = 16f; setTextColor(Color.BLACK); setPadding(20, 6, 20, 8)
             text = "Draw with the stylus. Fingers do not draw."
@@ -73,9 +82,9 @@ class MainActivity : Activity() {
             status.text = message
             mode.text = if (surface.rawInput) "BOOX pen" else "Android pen"
         }
-        surface.ready = { updateDocumentInfo(); configurePen() }
+        surface.ready = { updateDocumentInfo(); schedulePenConfiguration() }
         surface.unavailable = { adapter.close() }
-        surface.viewportWillChange = { adapter.close() }
+        surface.viewportWillChange = { surface.inputEnabled = false; adapter.close() }
         surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
         root.addView(surface, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -84,6 +93,15 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private fun schedulePenConfiguration() {
+        val generation = ++penConfigurationGeneration
+        // Let heading/control invalidations reach a display frame before hardware scribble
+        // takes over refresh. Opening it immediately can leave the angle/zoom label stale.
+        surface.postOnAnimation {
+            surface.post { if (generation == penConfigurationGeneration) configurePen() }
+        }
+    }
 
     private fun configurePen() {
         adapter.close()
@@ -102,21 +120,23 @@ class MainActivity : Activity() {
             .put("width", document.spec.width).put("height", document.spec.height)
             .put("viewWidth", surface.width).put("viewHeight", surface.height)
             .put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
+            .put("rotationDegrees", transform.rotationDegrees)
             .put("mode", if (surface.rawInput) "boox" else "android")
             .put("maxCanvasPixels", CanvasSizes.maxPixels).put("heapLimitBytes", Runtime.getRuntime().maxMemory())
             .put("wallTimeMs", System.currentTimeMillis())
         document.spec.ppi?.let { state.put("ppi", it) }
         try { File(filesDir, "document-state.json").writeText(state.toString()) }
         catch (failure: Exception) { Log.w("BooxProbe", "Document diagnostics write failed", failure) }
-        Log.i("BooxProbe", "Document ${document.id} ${document.spec.width}x${document.spec.height} zoom=${transform.scale} offset=${transform.x},${transform.y}")
+        Log.i("BooxProbe", "Document ${document.id} ${document.spec.width}x${document.spec.height} zoom=${transform.scale} angle=${transform.rotationDegrees} offset=${transform.x},${transform.y}")
     }
 
     override fun onResume() {
         super.onResume(); resumed = true
         Log.i("BooxProbe", "Activity resumed")
-        surface.post { configurePen() }
+        schedulePenConfiguration()
     }
     override fun onPause() {
+        penConfigurationGeneration++
         resumed = false; surface.inputEnabled = false; adapter.close(); surface.checkpoint()
         Log.i("BooxProbe", "Activity paused; input closed and bitmap checkpointed")
         super.onPause()
@@ -125,19 +145,46 @@ class MainActivity : Activity() {
         super.onWindowFocusChanged(focused)
         if (::adapter.isInitialized) {
             Log.i("BooxProbe", "Window focus=$focused")
-            if (focused) surface.post { configurePen() }
-            else { surface.inputEnabled = false; adapter.close() }
+            if (focused) schedulePenConfiguration()
+            else { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() }
         }
     }
     override fun onDestroy() { adapter.close(); super.onDestroy() }
 
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
-        documentInfo.text = "BOOX Art · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}%"
+        val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
+        documentInfo.text = "BOOX Art · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
     private fun zoom(action: ZoomAction) {
         if (!surface.zoom(action)) Toast.makeText(this, "Lift the pen before changing zoom.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun rotateView(angle: Float) {
+        if (!surface.rotateView(angle)) Toast.makeText(this, "Lift the pen before rotating the view.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun chooseAngle() {
+        if (surface.isDrawing) { Toast.makeText(this, "Lift the pen before rotating the view.", Toast.LENGTH_SHORT).show(); return }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            setText(String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees))
+            setSelectAllOnFocus(true)
+            hint = "Angle in degrees"
+        }
+        val dialog = android.app.AlertDialog.Builder(this).setTitle("Rotate view")
+            .setMessage("Enter any angle in degrees. Exported artwork keeps its document orientation.")
+            .setView(input).setNegativeButton("Cancel", null).setNeutralButton("Reset") { _, _ -> rotateView(0f) }
+            .setPositiveButton("Apply", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val angle = input.text.toString().replace(',', '.').toFloatOrNull()
+                if (angle == null || !angle.isFinite()) input.error = "Enter a valid angle."
+                else { dialog.dismiss(); rotateView(angle) }
+            }
+        }
+        dialog.show()
     }
 
     private fun newCanvas() {
@@ -169,12 +216,13 @@ class MainActivity : Activity() {
             .put("curve", "linear")
         val document = checkNotNull(surface.document)
         val transform = surface.viewport.transform
-        val entry = JSONObject().put("schemaVersion", 3).put("source", source).put("stroke", strokeCount)
+        val entry = JSONObject().put("schemaVersion", 4).put("source", source).put("stroke", strokeCount)
             .put("pressureRange", range).put("brush", brush)
             .put("documentId", document.id).put("layerId", document.layerId)
             .put("coordinateSpace", "document").put("canvasWidth", document.spec.width).put("canvasHeight", document.spec.height)
             .put("viewWidth", surface.width).put("viewHeight", surface.height)
-            .put("viewport", JSONObject().put("scale", transform.scale).put("x", transform.x).put("y", transform.y))
+            .put("viewport", JSONObject().put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
+                .put("rotationDegrees", transform.rotationDegrees))
             .put("wallTimeMs", System.currentTimeMillis()).put("points", points)
         try { File(filesDir, "strokes.jsonl").appendText("$entry\n") }
         catch (error: Exception) { Log.e("BooxProbe", "Stroke log write failed", error) }

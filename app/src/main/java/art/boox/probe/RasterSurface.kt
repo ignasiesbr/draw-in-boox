@@ -84,6 +84,15 @@ class RasterSurface(
         return true
     }
 
+    fun rotateView(angle: Float): Boolean {
+        if (isDrawing || document == null) return false
+        viewportWillChange?.invoke()
+        viewport.rotateTo(angle)
+        render()
+        ready?.invoke()
+        return true
+    }
+
     fun beginRawStroke() { rawStroke = true }
     fun endRawStroke() { rawStroke = false }
 
@@ -130,14 +139,12 @@ class RasterSurface(
         try {
             canvas.drawColor(Color.LTGRAY)
             val current = document ?: return
-            val rect = viewport.documentRect()
-            canvas.drawRect(rect, paper)
             val saved = canvas.save()
             try {
-                canvas.clipRect(rect)
                 val transform = viewport.transform
-                canvas.translate(transform.x, transform.y)
-                canvas.scale(transform.scale, transform.scale)
+                canvas.concat(transform.matrix())
+                canvas.drawRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat(), paper)
+                canvas.clipRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat())
                 canvas.drawBitmap(current.layer, 0f, 0f, bitmapPaint)
                 brush.draw(canvas, pending)
             } finally { canvas.restoreToCount(saved) }
@@ -157,7 +164,7 @@ class RasterSurface(
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (action == MotionEvent.ACTION_DOWN) cancelStroke()
                 if (event.getToolType(actionIndex) != MotionEvent.TOOL_TYPE_STYLUS || activePointer != -1) return true
-                if (!viewport.drawingRect().contains(event.getX(actionIndex), event.getY(actionIndex))) return true
+                if (!viewport.containsViewPoint(event.getX(actionIndex), event.getY(actionIndex))) return true
                 activePointer = event.getPointerId(actionIndex)
                 strokeTransform = viewport.transform
                 val axis = event.device?.getMotionRange(MotionEvent.AXIS_PRESSURE, event.source)

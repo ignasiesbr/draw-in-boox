@@ -4,6 +4,8 @@ Prepared and updated 2026-10-22. This file distinguishes recommendations from ve
 
 ## Current resume point
 
+Rotation regression follow-up: user reported angled strokes disappearing on zoom. Captured logs showed hardware preview without raw begin/end or stroke commits at nonzero angles. Separating polygon masks from raw input restored recording, but the user reported loss of live preview. The latest adapter removes the large stepped exclusion masks entirely, using the paper's bounding rectangle and an off-view clearing exclusion for both raw input and preview. Raw strokes starting outside document bounds are rejected; bitmap clipping handles edge crossings. Hardware preview may temporarily spill across angled paper edges until pen-up. Exact polygon preview clipping remains unresolved. User physically confirmed the latest change works and accepted temporary preview spill across angled paper edges. Preserve both live preview and recording in further fixes.
+
 The prototype is installed and working. User confirmed BOOX pen mode is responsive, pen-only canvas/finger-operated UI behavior is acceptable for now, live pressure sensitivity works, and button zoom/pen alignment seems to work well. The first planned milestone now includes a fixed-size single-layer document, canvas-size selector, and button zoom. Build/lint and expanded device instrumentation pass.
 
 For day-to-day development use `PROBE.md`, including its code map and SDK initialization requirements. The roadmap is [../plan.md](../plan.md): document/viewport separation and button zoom are delivered; finger navigation is next, followed by pen system, layers/history/persistence, and toolbar customization. Replay and timing instrumentation remain follow-up work. Detailed UI design is deferred. Exact hardware-preview/bitmap shape equivalence, a systematic physical orientation/edge test matrix, and ghosting remain open checks; document cropping on view resize has been fixed and tested.
@@ -135,6 +137,18 @@ Replay, rendering-time instrumentation, app-state snapshots, and richer capabili
 4. Expand brushes and zoom after preview-to-bitmap handoff is reliable. Hardware preview styles may not match arbitrary custom brushes.
 
 ## State at handoff
+
+### Arbitrary-angle view rotation follow-up 2026-10-22
+
+- User clarified rotation is for the drawing view, not permanent document rotation, and requested arbitrary angles. Implemented ±15° controls, an exact/fractional angle dialog, and reset. Final UI and finger-rotation gestures are deferred.
+- Before editing, initialized local Git and committed the working document/zoom baseline as `8d85b0f`, tagged `baseline-before-view-rotation`. Author identity was provided by the user and set only for this repository. No remote was configured or pushed. Rotation work is separate from that baseline.
+- `ViewTransform` now has forward/inverse rotation and a shared display matrix. Viewport Fit/clamping uses rotated bounds; Android hit testing uses the actual paper polygon. Both pen paths commit inverse-mapped document coordinates. Exports retain dimensions and pixel orientation.
+- View angle is additive viewport metadata in archive version 1; older checkpoints default to 0°. Stroke schema 4 includes angle; schema 3 remains unrotated document coordinates. `document-state.json` also reports angle.
+- BOOX supports rectangular region exclusions. Rasterize the polygon into a Region and exclude pixel rectangles outside it from both raw input and firmware preview. At 15° there were 1570 exclusions and ~946 ms setup; smooth interactive rotation performance is not solved. Returning upright sends an off-view sentinel exclusion because SDK calls with empty lists do not clear native/firmware state.
+- Input is disabled during viewport transitions. Pen reopening is deferred until heading/control changes have had a display frame, to avoid stale zoom/angle labels while the canvas updates.
+- Device tests passed arbitrary/fractional/negative angles, forward/inverse and Canvas-matrix agreement, Fit bounds, clipping inclusion/exclusion samples, center preservation, invalid-angle rejection, rotated Android pen mapping, gray-margin rejection, rotation refusal during a stroke, angle persistence, and unchanged PNG pixel orientation. Existing document/pressure/input checks also passed.
+- Initial rotation build installed and opened at 15° with BOOX input enabled. User has been asked to physically check nib alignment, pen-up handoff, angled-edge clipping, exact angle, and reset. Do not mark this hardware behavior confirmed until feedback arrives.
+- Final rotation build/lint, expanded device tests, installation, and launch passed after the UI-refresh ordering fix. Latest capture: `captures/20261022-175421/`; screenshot (screenshot omitted). Heading correctly shows 15° and the fitted zoom. BOOX mask setup measured 923 ms; physical validation is still pending. Rotation changes are not part of the pre-rotation baseline commit.
 
 ### Document and button-zoom milestone delivered 2026-10-22
 

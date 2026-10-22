@@ -49,6 +49,7 @@ class RasterInstrumentation : Instrumentation() {
                     }
                     checkPressure(view, file)
                     checkPointers(view, strokes)
+                    checkRotatedPointers(view, strokes)
                     checkCheckpoint(testContext, view, file)
                     DocumentChecks.run(targetContext)
                 } finally { file.delete() }
@@ -56,7 +57,7 @@ class RasterInstrumentation : Instrumentation() {
             }
             failure?.let { throw it }
             CanvasDialogChecks.run(this)
-            result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport transforms, fixed document resize, document checkpoint, canvas selector validation\n")
+            result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport/rotation/mask, fixed document/export orientation, document checkpoint, canvas selector validation\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
             result.putString("stream", "FAIL: ${error.stackTraceToString()}\n")
@@ -162,5 +163,27 @@ class RasterInstrumentation : Instrumentation() {
             it.recycle()
         }
         restored.clear()
+    }
+
+    private fun checkRotatedPointers(view: RasterSurface, strokes: MutableList<PenStroke>) {
+        view.clear()
+        view.rotateView(37.25f)
+        val first = view.viewport.transform.toView(20f, 20f)
+        val last = view.viewport.transform.toView(40f, 40f)
+        val before = strokes.size
+        send(view, MotionEvent.ACTION_DOWN, Pointer(7, MotionEvent.TOOL_TYPE_STYLUS, first.x, first.y))
+        check(!view.rotateView(90f)) { "View rotated during a pen stroke" }
+        check(view.viewport.rotationDegrees == 37.25f)
+        send(view, MotionEvent.ACTION_UP, Pointer(7, MotionEvent.TOOL_TYPE_STYLUS, last.x, last.y))
+        check(strokes.size == before + 1)
+        val sample = strokes.last().samples.last()
+        check(kotlin.math.abs(sample.x - 40f) < 0.001f && kotlin.math.abs(sample.y - 40f) < 0.001f) {
+            "Rotated Android pen input did not commit in document coordinates"
+        }
+        check(!view.viewport.containsViewPoint(0f, 0f))
+        send(view, MotionEvent.ACTION_DOWN, Pointer(7, MotionEvent.TOOL_TYPE_STYLUS, 0f, 0f))
+        send(view, MotionEvent.ACTION_UP, Pointer(7, MotionEvent.TOOL_TYPE_STYLUS, 0f, 0f))
+        check(strokes.size == before + 1) { "Angled gray margin accepted paint" }
+        view.rotateView(0f)
     }
 }
