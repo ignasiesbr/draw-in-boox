@@ -5,10 +5,10 @@ Prepared and updated 2026-10-22 from the working Go 10.3 probe. Sections 1 and 2
 ## Milestone status
 
 - **Delivered:** fixed-size single-layer document, canvas presets/custom dimensions, portrait/landscape swap, memory limits, atomic document checkpoint, and full-document PNG export.
-- **Delivered:** +/−, Fit, and 100% zoom, document/view coordinate mapping, zoom-scaled hardware preview width, and paper-region clipping. Zoom is capped at 400%; requests during a pen stroke are refused until the pen is lifted. Finger navigation is not enabled yet.
+- **Delivered:** +/−, Fit, and 100% zoom, document/view coordinate mapping, zoom-scaled hardware preview width, and paper-region clipping. Zoom is capped at 400%; requests during a pen stroke are refused until the pen is lifted. Two-finger pan, deferred twist rotation and seven-level deferred pinch zoom are implemented; physical pinch validation is pending.
 - **Verified:** build/lint; device tests for presets/exports, invalid dimensions, migration, transforms, view resizing, persistence, existing pressure/input behavior, and selector validation. User tested button zoom and reported pen alignment works well.
-- **Next:** section 3, finger navigation. Exact hardware/bitmap brush-shape matching and a systematic orientation/edge/ghosting test matrix remain useful regression checks. Recorded-stroke replay and detailed render timing remain follow-up work, not delivered commands.
-- **View rotation addition:** arbitrary-angle viewport rotation with ±15° steps, an exact/fractional angle control, and reset is implemented. Pixels/exports keep their document orientation. Transform, clipping-mask, pen-input, persistence, and unchanged-export tests pass; the user confirmed live BOOX preview and stroke retention through zoom, accepting temporary preview spill across angled paper edges. The baseline before this addition is Git tag `baseline-before-view-rotation` (`8d85b0f`). Finger rotation gestures remain deferred.
+- **Next:** physically validate section 3 navigation, then continue the pen system. Exact hardware/bitmap brush-shape matching and a systematic orientation/edge/ghosting test matrix remain useful regression checks. Recorded-stroke replay and detailed render timing remain follow-up work, not delivered commands.
+- **View rotation addition:** arbitrary-angle viewport rotation with ±15° steps, an exact/fractional angle control, and reset is implemented. Pixels/exports keep their document orientation. Transform, clipping-mask, pen-input, persistence, and unchanged-export tests pass; the user confirmed live BOOX preview and stroke retention through zoom, accepting temporary preview spill across angled paper edges. The baseline before this addition is Git tag `baseline-before-view-rotation` (`8d85b0f`). Deferred two-finger twist rotation is implemented; see section 3.
 
 ## Original starting point before this milestone
 
@@ -98,6 +98,12 @@ Validation:
 
 ## 3. Finger navigation: pinch and pan
 
+Deferred pinch zoom now uses levels 1–7: 10%, 25%, 50%, 100%, 150%, 250%, 400%. Select on an upright level/percentage badge while the canvas stays still, apply once on release around the selection midpoint. The first deliberate pinch/twist owns the remainder of the gesture; cancellation discards pending selection. Automated checks pass; physical pinch feel, mode thresholds and e-ink ghosting remain to validate.
+
+Twist selection includes upright snapping: catch within +/-4 degrees of 0, release beyond +/-7 degrees, with the badge showing the exact committed angle. Other snap angles and preferences remain future UX choices.
+
+**Panning implemented, physical validation pending:** two-finger midpoint translation with movement threshold, stable pointer IDs, cancellation/focus handling, pen priority, and BOOX suspension/reconfiguration once per navigation session. Single fingers do not pan or paint. Panning works at any zoom and angle, including fitted paper; Fit recenters. No new dependency. Deferred two-finger twist rotation now shares the CanvasGestures lifecycle: select the angle on a small rotating badge, apply once on release, discard on cancellation. The user confirmed selection works; the badge now rotates as an orientation preview. Deferred pinch zoom is implemented with seven absolute levels from 10% to 400%; physical validation is pending.
+
 **Purpose:** add natural navigation on top of the already-tested viewport.
 
 Work:
@@ -145,6 +151,8 @@ Validation:
 - Saved brush settings survive restart; old strokes and exported artwork do not change when settings change.
 
 ## 5. Layers, undo/redo, and editable persistence
+
+**Initial history implemented:** strokes and Clear are `DocumentEdit` actions. The single-layer history stores compressed before/after 128px tile changes, up to 10 actions and a 32MiB/heap-based budget. Undo/Redo buttons plus two-finger tap Undo / double two-finger tap Redo are implemented; physical gesture validation is pending. Single-tap dispatch waits briefly to disambiguate double-tap redo. New effective edits invalidate redo; view changes do not enter history. New canvas/restart clears the session stack. Automated coverage includes generic fill/cut-style raster edits, overlap/alpha, Clear, branching, eviction, timing/cancellation and current pen/navigation regression checks. Layers, eraser tools, structural layer actions and durable save/open remain future work; history persistence across restarts is not implemented.
 
 **Purpose:** make artwork editable across tools, sessions, and multiple raster layers. Build these together because history must identify which document and layer each action affects.
 

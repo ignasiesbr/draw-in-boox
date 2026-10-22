@@ -21,6 +21,8 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var mode: Button
     private lateinit var documentInfo: TextView
+    private lateinit var undoButton: Button
+    private lateinit var redoButton: Button
     private var preferBoox = true
     private var resumed = false
     private var strokeCount = 0
@@ -50,6 +52,9 @@ class MainActivity : Activity() {
         }
         button(toolbar, "Refresh") { surface.render(); adapter.refresh() }
         button(toolbar, "Export PNG") { export() }
+        undoButton = button(toolbar, "Undo") { if (!surface.undo()) historyBusy() }
+        redoButton = button(toolbar, "Redo") { if (!surface.redo()) historyBusy() }
+        undoButton.isEnabled = false; redoButton.isEnabled = false
         button(toolbar, "Clear") {
             android.app.AlertDialog.Builder(this).setMessage("Clear this drawing?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
@@ -85,14 +90,32 @@ class MainActivity : Activity() {
         surface.ready = { updateDocumentInfo(); schedulePenConfiguration() }
         surface.unavailable = { adapter.close() }
         surface.viewportWillChange = { surface.inputEnabled = false; adapter.close() }
+        surface.navigationStarted = { penConfigurationGeneration++; adapter.close() }
+        surface.historyChanged = {
+            undoButton.isEnabled = surface.history.canUndo
+            redoButton.isEnabled = surface.history.canRedo
+        }
+        surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
         surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
-        root.addView(surface, LinearLayout.LayoutParams(-1, 0, 1f))
+        val canvasArea = FrameLayout(this)
+        canvasArea.addView(surface, FrameLayout.LayoutParams(-1, -1))
+        val gestureIndicator = GestureIndicator(this, adapter::setIndicatorFastRefresh)
+        // A 280dp square fits the badge's diagonal at every rotation angle.
+        canvasArea.addView(gestureIndicator, FrameLayout.LayoutParams(dp(280), dp(280),
+            android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(12) })
+        surface.rotationPreviewChanged = gestureIndicator::showAngle
+        surface.zoomPreviewChanged = gestureIndicator::showZoom
+        root.addView(canvasArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private fun historyBusy() {
+        Toast.makeText(this, "Finish drawing or navigation before changing history.", Toast.LENGTH_SHORT).show()
+    }
 
     private fun schedulePenConfiguration() {
         val generation = ++penConfigurationGeneration
@@ -104,6 +127,7 @@ class MainActivity : Activity() {
     }
 
     private fun configurePen() {
+        if (surface.isNavigating) return
         adapter.close()
         surface.cancelStroke()
         surface.inputEnabled = resumed && hasWindowFocus()
@@ -122,6 +146,8 @@ class MainActivity : Activity() {
             .put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
             .put("rotationDegrees", transform.rotationDegrees)
             .put("mode", if (surface.rawInput) "boox" else "android")
+            .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
+            .put("historyBytes", surface.history.bytesUsed)
             .put("maxCanvasPixels", CanvasSizes.maxPixels).put("heapLimitBytes", Runtime.getRuntime().maxMemory())
             .put("wallTimeMs", System.currentTimeMillis())
         document.spec.ppi?.let { state.put("ppi", it) }

@@ -69,6 +69,15 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         catch (error: Exception) { failure(error) }
     }
 
+    /** Best-effort fast black/white refresh scoped to the angle badge, never app-wide. */
+    fun setIndicatorFastRefresh(indicator: android.view.View, enabled: Boolean) {
+        try {
+            if (enabled) EpdController.setViewDefaultUpdateMode(indicator, com.onyx.android.sdk.api.device.epd.UpdateMode.DU)
+            else EpdController.resetViewUpdateMode(indicator)
+        } catch (error: LinkageError) { Log.w("BooxProbe", "Angle indicator uses normal refresh", error) }
+        catch (error: Exception) { Log.w("BooxProbe", "Angle indicator uses normal refresh", error) }
+    }
+
     private fun resumePreview(target: TouchHelper) {
         target.setRawDrawingEnabled(true)
         // SFTouchRender.openDrawing() resets the firmware style to PENCIL. Apply the brush

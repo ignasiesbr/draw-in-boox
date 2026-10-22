@@ -6,7 +6,10 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.ViewConfiguration
 import java.io.File
+import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /** The document owns pixels; this SurfaceView owns only display and pen interaction. */
 class RasterSurface(
@@ -18,6 +21,9 @@ class RasterSurface(
         private set
     val viewport = DocumentViewport()
     val brush = PressureBrush()
+    val history = EditHistory()
+    var historyChanged: (() -> Unit)? = null
+    var historyFeedback: ((String) -> Unit)? = null
     private val store = DocumentStore(context.filesDir)
     private val pending = mutableListOf<PenSample>()
     private var activePointer = -1
@@ -31,20 +37,86 @@ class RasterSurface(
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private var loadFailed = false
     var inputEnabled = true
-        set(value) { field = value; if (!value) cancelStroke() }
+        set(value) { field = value; if (!value) { historyTaps.cancel(); gestures.cancel(); cancelStroke() } }
     var rawInput = false
         set(value) { if (field != value) cancelStroke(); field = value }
     var ready: (() -> Unit)? = null
     var unavailable: (() -> Unit)? = null
     var viewportWillChange: (() -> Unit)? = null
+    var navigationStarted: (() -> Unit)? = null
+    var rotationPreviewChanged: ((Float?) -> Unit)? = null
+    var zoomPreviewChanged: ((ZoomLevel?) -> Unit)? = null
+    var zoomPreviewLevel: ZoomLevel? = null
+        private set
+    var rotationPreviewAngle: Float? = null
+        private set
+    private var navigationStartAngle = 0f
+    private var navigationStartScale = 1f
+    private var zoomAnchor = PointF()
+    private var rotationSnappedToZero = false
+    val isNavigating: Boolean get() = gestures.active
+    private val gestures = CanvasGestures(ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
+        minRotationSpan = 48f * resources.displayMetrics.density,
+        begin = {
+            if (isDrawing || document == null) false
+            else {
+                navigationStartAngle = viewport.rotationDegrees
+                navigationStartScale = viewport.transform.scale
+                rotationSnappedToZero = false
+                historyTaps.cancel()
+                navigationStarted?.invoke(); true
+            }
+        },
+        pan = { dx, dy -> viewport.panBy(dx, dy); requestFrame() },
+        rotation = { delta ->
+            val target = DocumentViewport.normalizeAngle(navigationStartAngle + delta)
+            // Enter within 4 degrees; stay caught until 7 degrees to resist finger jitter.
+            // Use the unrounded target so integer display rounding cannot move the boundary.
+            rotationSnappedToZero = abs(target) <= if (rotationSnappedToZero) 7f else 4f
+            val angle = if (rotationSnappedToZero) 0f
+                else DocumentViewport.normalizeAngle(target.roundToInt().toFloat())
+            if (angle != rotationPreviewAngle) {
+                rotationPreviewAngle = angle
+                rotationPreviewChanged?.invoke(angle)
+            }
+        },
+        zoom = { ratio, x, y ->
+            if (zoomPreviewLevel == null) zoomAnchor = PointF(x, y)
+            val level = ZoomLevels.nearest(navigationStartScale * ratio)
+            if (level != zoomPreviewLevel) {
+                zoomPreviewLevel = level
+                zoomPreviewChanged?.invoke(level)
+            }
+        },
+        end = { commit ->
+            val angle = rotationPreviewAngle
+            val zoom = zoomPreviewLevel
+            rotationPreviewAngle = null
+            zoomPreviewLevel = null
+            rotationSnappedToZero = false
+            rotationPreviewChanged?.invoke(null)
+            zoomPreviewChanged?.invoke(null)
+            if (commit && angle != null) viewport.rotateTo(angle)
+            if (commit && zoom != null) viewport.zoomTo(zoom.scale, zoomAnchor.x, zoomAnchor.y)
+            render(); ready?.invoke()
+        })
     var error: ((String) -> Unit)? = null
+    private val historyTaps = HistoryTapGestures(ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
+        ViewConfiguration.getDoubleTapTimeout().toLong(),
+        eligible = { inputEnabled && document != null && !isDrawing && !isNavigating },
+        post = { task, delay -> postDelayed(task, delay) }, remove = { removeCallbacks(it) },
+        undo = { if (!undo()) historyFeedback?.invoke("Nothing to undo") },
+        redo = { if (!redo()) historyFeedback?.invoke("Nothing to redo") },
+        trace = { Log.d("BooxProbe", it) })
 
     init { holder.addCallback(this) }
 
     override fun surfaceCreated(holder: SurfaceHolder) = render()
-    override fun surfaceDestroyed(holder: SurfaceHolder) { cancelStroke(); unavailable?.invoke() }
+    override fun surfaceDestroyed(holder: SurfaceHolder) { historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke() }
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         if (width <= 0 || height <= 0 || loadFailed) return
+        historyTaps.cancel()
+        gestures.cancel()
         cancelStroke()
         try {
             val loaded = if (document == null) store.loadOrCreate(defaultSpec) else null
@@ -61,11 +133,13 @@ class RasterSurface(
     }
 
     fun createDocument(spec: CanvasSpec) {
-        check(!isDrawing) { "Lift the pen before creating a canvas." }
+        check(!isDrawing && !isNavigating) { "Finish drawing or navigation before creating a canvas." }
         val replacement = DrawingDocument.create(spec)
         try { store.save(replacement, null) } catch (failure: Throwable) { replacement.recycle(); throw failure }
         viewportWillChange?.invoke()
+        historyTaps.cancel()
         cancelStroke()
+        history.clear(); historyChanged?.invoke()
         document?.recycle()
         document = replacement
         loadFailed = false
@@ -76,7 +150,7 @@ class RasterSurface(
     }
 
     fun zoom(action: ZoomAction): Boolean {
-        if (isDrawing || document == null) return false
+        if (isDrawing || isNavigating || document == null) return false
         viewportWillChange?.invoke()
         viewport.change(action)
         render()
@@ -85,7 +159,7 @@ class RasterSurface(
     }
 
     fun rotateView(angle: Float): Boolean {
-        if (isDrawing || document == null) return false
+        if (isDrawing || isNavigating || document == null) return false
         viewportWillChange?.invoke()
         viewport.rotateTo(angle)
         render()
@@ -93,7 +167,7 @@ class RasterSurface(
         return true
     }
 
-    fun beginRawStroke() { rawStroke = true }
+    fun beginRawStroke() { historyTaps.cancel(); rawStroke = true }
     fun endRawStroke() { rawStroke = false }
 
     /** Samples committed here are always in document pixels. */
@@ -101,7 +175,9 @@ class RasterSurface(
         val current = document ?: return
         val valid = samples.filter { it.x.isFinite() && it.y.isFinite() }
         if (valid.isEmpty()) return
-        brush.draw(Canvas(current.layer), valid)
+        historyTaps.cancel()
+        history.execute(current, StrokeEdit(valid, brush))
+        historyChanged?.invoke()
         render()
         strokeFinished(PenStroke(valid, source, range))
     }
@@ -114,9 +190,26 @@ class RasterSurface(
     }
 
     fun clear() {
+        historyTaps.cancel()
         cancelStroke()
-        document?.clear()
+        document?.let { history.execute(it, ClearLayerEdit) }
+        historyChanged?.invoke()
         render()
+    }
+
+    fun undo(): Boolean = changeHistory(false)
+    fun redo(): Boolean = changeHistory(true)
+
+    private fun changeHistory(redo: Boolean): Boolean {
+        val current = document ?: return false
+        if (isDrawing || isNavigating || !inputEnabled) return false
+        if (if (redo) !history.canRedo else !history.canUndo) return false
+        historyTaps.cancel()
+        viewportWillChange?.invoke()
+        val label = if (redo) history.redo(current) else history.undo(current)
+        render(); historyChanged?.invoke(); ready?.invoke()
+        historyFeedback?.invoke("${if (redo) "Redo" else "Undo"}: $label")
+        return true
     }
 
     fun save(file: File): Boolean = document?.exportPng(file) ?: false
@@ -156,7 +249,10 @@ class RasterSurface(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!inputEnabled || rawInput || document == null) return true
+        if (!inputEnabled || document == null) return true
+        if (historyTaps.onTouchEvent(event)) { gestures.cancel(); return true }
+        if (gestures.onTouchEvent(event)) return true
+        if (rawInput || isNavigating) return true
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_CANCEL) { cancelStroke(); return true }
         val actionIndex = event.actionIndex

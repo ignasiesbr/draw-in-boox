@@ -24,6 +24,8 @@ class RasterInstrumentation : Instrumentation() {
                 val strokes = mutableListOf<PenStroke>()
                 val view = RasterSurface(testContext, CanvasSpec(128, 128)) { strokes += it }
                 view.surfaceChanged(view.holder, 0, 128, 128)
+                // Each run starts from a known viewport; restore is tested separately.
+                view.createDocument(CanvasSpec(128, 128))
                 view.zoom(ZoomAction.ACTUAL)
                 view.clear()
                 val file = File(testContext.filesDir, "test.png")
@@ -52,12 +54,17 @@ class RasterInstrumentation : Instrumentation() {
                     checkRotatedPointers(view, strokes)
                     checkCheckpoint(testContext, view, file)
                     DocumentChecks.run(targetContext)
+                    CanvasGestureChecks.run(targetContext)
+                    GestureRotationChecks.run(targetContext)
+                    GestureZoomChecks.run(targetContext)
+                    HistoryChecks.run(targetContext)
+                    HistoryTapChecks.run()
                 } finally { file.delete() }
               } catch (error: Throwable) { failure = error }
             }
             failure?.let { throw it }
             CanvasDialogChecks.run(this)
-            result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport/rotation/mask, fixed document/export orientation, document checkpoint, canvas selector validation\n")
+            result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport/rotation/mask, two-finger pan/cancellation/persistence, fixed document/export orientation, document checkpoint, canvas selector validation\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
             result.putString("stream", "FAIL: ${error.stackTraceToString()}\n")

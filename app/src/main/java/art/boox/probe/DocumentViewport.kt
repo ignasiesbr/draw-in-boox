@@ -67,6 +67,33 @@ class DocumentViewport {
         if (fitted) fit() else setCenter(current.scale, current.centerX, current.centerY)
     }
 
+    /** Keep the selected document point under the pinch midpoint, subject to bounds. */
+    fun zoomTo(scale: Float, anchorX: Float, anchorY: Float) {
+        require(scale.isFinite() && scale > 0f && anchorX.isFinite() && anchorY.isFinite())
+        val zoom = scale.coerceIn(minScale, 4f)
+        val anchor = transform.toDocument(anchorX, anchorY)
+        val scaled = ViewTransform(zoom, 0f, 0f, rotationDegrees).toView(anchor.x, anchor.y)
+        val proposed = ViewTransform(zoom, anchorX - scaled.x, anchorY - scaled.y, rotationDegrees)
+        val center = proposed.toDocument(viewWidth / 2f, viewHeight / 2f)
+        fitted = false
+        setCenter(zoom, center.x, center.y)
+        if (!Region().setPath(paperPath(), Region(0, 0, viewWidth, viewHeight))) {
+            setCenter(zoom, document.width / 2f, document.height / 2f)
+        }
+    }
+
+    /** Screen-space movement stays under the fingers even when the paper is rotated. */
+    fun panBy(dx: Float, dy: Float) {
+        require(dx.isFinite() && dy.isFinite())
+        val previous = transform
+        val center = transform.toDocument(viewWidth / 2f - dx, viewHeight / 2f - dy)
+        fitted = false
+        setCenter(transform.scale, center.x, center.y)
+        // Bounding boxes can overlap at a gray corner while angled paper is entirely
+        // off screen. Refuse that final step so the actual document remains reachable.
+        if (!Region().setPath(paperPath(), Region(0, 0, viewWidth, viewHeight))) transform = previous
+    }
+
     fun change(action: ZoomAction) {
         when (action) {
             ZoomAction.FIT -> fit()
@@ -94,8 +121,11 @@ class DocumentViewport {
         val proposedTop = viewHeight / 2f - center.y + bounds.top * zoom
         val scaledWidth = bounds.width() * zoom
         val scaledHeight = bounds.height() * zoom
-        val left = if (scaledWidth <= viewWidth) (viewWidth - scaledWidth) / 2f else proposedLeft.coerceIn(viewWidth - scaledWidth, 0f)
-        val top = if (scaledHeight <= viewHeight) (viewHeight - scaledHeight) / 2f else proposedTop.coerceIn(viewHeight - scaledHeight, 0f)
+        // Permit moving even fitted/small paper, while keeping part of its bounds visible.
+        val visibleX = minOf(64f, scaledWidth / 2f, viewWidth / 2f)
+        val visibleY = minOf(64f, scaledHeight / 2f, viewHeight / 2f)
+        val left = proposedLeft.coerceIn(visibleX - scaledWidth, viewWidth - visibleX)
+        val top = proposedTop.coerceIn(visibleY - scaledHeight, viewHeight - visibleY)
         transform = ViewTransform(zoom, left - bounds.left * zoom, top - bounds.top * zoom, rotationDegrees)
     }
 
