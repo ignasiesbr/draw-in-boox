@@ -1,5 +1,23 @@
 # Kotlin drawing prototype: working guide
 
+Current build marker: `penPipeline=eraser-toolbar-v1`. Adds selected-tool settings
+and a layer eraser, retaining shader-safe-v2 native input setup. See BRUSHES.md.
+
+Current crash workaround is `penPipeline=shader-safe-v2`: gray/wide brushes use
+app-rendered live ink (Android pen mode), and only black/up-to-30px declared
+footprints may open native preview. Fixed brushes make no contact-time native
+width calls; parameters are configured while paused and the input reader is
+explicitly enabled before rendering. See NATIVE_PREVIEW_SAFETY.md.
+Old instructions about requesting gray native colors are superseded.
+
+Marker replaces the Monoline display label while retaining its saved ID and supports 1–128 document pixels. Tap the toolbar ink swatch for eight opaque gray tones; shade is shared across tools. Native setup logs `requestedColorArgb`; schema-7 stroke records add captured ARGB/gray/engine data. Physical native-gray and maximum-width matching remain to be checked. `MarkerChecks` covers these settings, history, export and dialogs; the isolated performance-only instrumentation also reports `markerBenchmark`.
+
+Latest performance build marker is `penPipeline=async-handoff-v1` in Launch logs. BOOX screen painting now uses a worker after a 450ms quiet gap; `asyncSnapshot`, `asyncSurface`, `asyncCompletion` and deferred-again presentation records distinguish UI work from worker waits. Native SDK transitions remain on UI. See PERFORMANCE.md for remaining limits and physical validation.
+
+For fast-writing/pen-up diagnostics, see [PERFORMANCE.md](PERFORMANCE.md). `BooxPerf` now separates live width scheduling, history, surface presentation, queued commit, SDK resume and background diagnostics. `dev.ps1 capture` includes these records. Stroke JSON is now written by a bounded background worker; missing diagnostic records under saturation do not mean missing artwork.
+
+Brush toolbar: Ink/Tilt/Monoline select persisted per-preset settings; Size and Brush settings use explicit Apply/Cancel. Default Tilt preserves the accepted live response. Stroke logs now use schema 6 (same point layout as schema 5) and record captured engine/version/preset plus resolved width settings. Add `BrushChecks` to relevant verification; physical live-versus-committed comparison remains necessary after brush changes.
+
 This is a single-document, multi-layer prototype running on the verified Go103 / Android 12 / firmware 4.2 device. Document dimensions, canvas selection, and button zoom are implemented; [../plan.md](../plan.md) tracks later features and milestone status. Detailed UI design is deferred.
 
 ## Current hardware preview policy

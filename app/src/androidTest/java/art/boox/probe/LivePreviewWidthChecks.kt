@@ -46,5 +46,12 @@ object LivePreviewWidthChecks {
             post = { task, delay -> queued += task to delay }, remove = {}, apply = { applied += it })
         zoomed.begin(sample(65f)); drain(); check(applied.last() == 60f)
         zoomed.finish()
+        // SDK callbacks already on UI: an inline begin must send width before end
+        // can cancel queued work, even for a one-point stroke.
+        val immediate = LivePreviewWidth(widthForSample = brush::width,
+            post = { task, _ -> task.run() }, remove = {}, apply = { applied += it })
+        val beforeImmediate = applied.size
+        immediate.begin(sample(65f)); immediate.finish()
+        check(applied.size == beforeImmediate + 1 && applied.last() == 30f)
     }
 }

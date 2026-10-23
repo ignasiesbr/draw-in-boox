@@ -9,7 +9,6 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.nio.ByteBuffer
 import java.util.zip.Deflater
-import java.util.zip.DeflaterOutputStream
 import java.util.zip.InflaterInputStream
 import kotlin.math.max
 import kotlin.math.min
@@ -23,7 +22,7 @@ interface DocumentEdit {
 }
 
 class StrokeEdit(private val samples: List<PenSample>, private val brush: PressureBrush) : DocumentEdit {
-    override val label = "Stroke"
+    override val label = if (brush.isEraser) "Erase" else "Stroke"
     override fun affectedRegions(spec: CanvasSpec): List<Rect> {
         val padding = brush.maxRenderedWidth / 2f + 2f
         var previous = samples.firstOrNull() ?: return emptyList()
@@ -103,7 +102,8 @@ class EditHistory(
 
     fun clear() { entries.clear(); cursor = 0; bytesUsed = 0 }
 
-    fun execute(document: DrawingDocument, edit: DocumentEdit): Boolean {
+    fun execute(document: DrawingDocument, edit: DocumentEdit): Boolean = CaptureSession().use { captureSession ->
+        val started = StrokePerformance.now()
         check(document.canPaint) { "Selected layer is locked or hidden" }
         val bounds = Rect(0, 0, document.spec.width, document.spec.height)
         val tiles = linkedSetOf<Pair<Int, Int>>()
@@ -115,12 +115,16 @@ class EditHistory(
             }
         }
         val layerId = document.layerId
-        val before = tiles.map { (x, y) -> capture(document.layer, Rect(x * TILE, y * TILE,
+        val bounded = StrokePerformance.now()
+        val before = tiles.map { (x, y) -> captureSession.capture(document.layer, Rect(x * TILE, y * TILE,
             min((x + 1) * TILE, bounds.right), min((y + 1) * TILE, bounds.bottom))) }
+        val beforeCaptured = StrokePerformance.now()
+        var applied = beforeCaptured
         val changes = try {
             edit.apply(document)
+            applied = StrokePerformance.now()
             before.mapNotNull { old ->
-                val after = capture(document.layer, old.rect)
+                val after = captureSession.capture(document.layer, old.rect)
                 if (old.bytes.contentEquals(after.bytes)) null else Change(old, after)
             }
         } catch (error: Exception) {
@@ -128,6 +132,8 @@ class EditHistory(
             document.invalidateComposite(before.map { it.rect })
             throw error
         }
+        val afterCaptured = StrokePerformance.now()
+        StrokePerformance.log("history label=${edit.label} tiles=${tiles.size} changed=${changes.size} boundsMs=${StrokePerformance.ms(started, bounded)} beforeMs=${StrokePerformance.ms(bounded, beforeCaptured)} brushMs=${StrokePerformance.ms(beforeCaptured, applied)} afterMs=${StrokePerformance.ms(applied, afterCaptured)} totalMs=${StrokePerformance.ms(started, afterCaptured)}")
         if (changes.isEmpty()) return false
         document.invalidateComposite(changes.map { it.before.rect })
         append(PixelEntry(document.id, layerId, edit.label, changes))
@@ -168,14 +174,14 @@ class EditHistory(
         }
     }
 
-    private fun captureLayers(document: DrawingDocument, ids: Set<String>, budget: Long): Map<String, List<Patch>>? {
+    private fun captureLayers(document: DrawingDocument, ids: Set<String>, budget: Long): Map<String, List<Patch>>? = CaptureSession().use { captureSession ->
         var used = 0L
         val result = mutableMapOf<String, List<Patch>>()
         for (id in ids) {
             val bitmap = checkNotNull(document.findLayer(id)).bitmap
             val patches = mutableListOf<Patch>()
             for (y in 0 until bitmap.height step TILE) for (x in 0 until bitmap.width step TILE) {
-                val patch = capture(bitmap, Rect(x, y, min(x + TILE, bitmap.width), min(y + TILE, bitmap.height)))
+                val patch = captureSession.capture(bitmap, Rect(x, y, min(x + TILE, bitmap.width), min(y + TILE, bitmap.height)))
                 used += patch.bytes.size + 64
                 if (used > budget) return null
                 patches += patch
@@ -199,15 +205,28 @@ class EditHistory(
         return entry.label
     }
 
-    private fun capture(bitmap: Bitmap, rect: Rect): Patch {
-        val pixels = IntArray(rect.width() * rect.height())
-        bitmap.getPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
-        val raw = ByteBuffer.allocate(pixels.size * 4).apply { asIntBuffer().put(pixels) }.array()
-        val compressed = ByteArrayOutputStream()
-        val deflater = Deflater(Deflater.BEST_SPEED)
-        try { DeflaterOutputStream(compressed, deflater).use { it.write(raw) } }
-        finally { deflater.end() }
-        return Patch(Rect(rect), compressed.toByteArray())
+    /** Reuse native compressor and scratch space across all before/after tiles in a transaction.
+     * Patches still own independent lossless bytes; native resources are released on failure too. */
+    private class CaptureSession : java.io.Closeable {
+        private val pixels = IntArray(TILE * TILE)
+        private val raw = ByteArray(TILE * TILE * 4)
+        private val ints = ByteBuffer.wrap(raw).asIntBuffer()
+        private val output = ByteArrayOutputStream(1024)
+        private val compressed = ByteArray(8192)
+        private val deflater = Deflater(Deflater.BEST_SPEED)
+        fun capture(bitmap: Bitmap, rect: Rect): Patch {
+            val count = rect.width() * rect.height()
+            bitmap.getPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
+            ints.rewind(); ints.put(pixels, 0, count)
+            output.reset(); deflater.reset(); deflater.setInput(raw, 0, count * 4); deflater.finish()
+            while (!deflater.finished()) {
+                val size = deflater.deflate(compressed)
+                check(size > 0) { "History compression made no progress" }
+                output.write(compressed, 0, size)
+            }
+            return Patch(Rect(rect), output.toByteArray())
+        }
+        override fun close() { deflater.end() }
     }
 
     private companion object { const val TILE = 128 }

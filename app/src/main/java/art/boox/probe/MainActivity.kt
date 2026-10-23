@@ -33,6 +33,10 @@ class MainActivity : Activity() {
     private var resumed = false
     private var strokeCount = 0
     private var penConfigurationGeneration = 0
+    private lateinit var brushStore: BrushSettingsStore
+    private lateinit var brushLabel: TextView
+    private val brushButtons = mutableMapOf<BrushPreset, EinkIconButton>()
+    private val strokeDiagnostics = StrokeDiagnostics()
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -95,6 +99,8 @@ class MainActivity : Activity() {
         }
         root.addView(status)
         surface = RasterSurface(this, strokeFinished = ::recordStroke)
+        brushStore = BrushSettingsStore(this)
+        surface.selectBrush(brushStore.load(brushStore.selected()))
         adapter = BooxPenAdapter(surface) { message ->
             status.text = message
             mode.text = if (surface.rawInput) "BOOX pen" else "Android pen"
@@ -114,6 +120,23 @@ class MainActivity : Activity() {
         }
         surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
         surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
+        val drawingTools = LinearLayout(this)
+        BrushPreset.entries.forEach { preset ->
+            val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
+                tag = "brush.${preset.id}"
+                setOnClickListener {
+                    if (surface.brush.settings?.preset == preset) editBrush()
+                    else changeBrush(brushStore.load(preset))
+                }
+            }
+            brushButtons[preset] = control
+            drawingTools.addView(control, LinearLayout.LayoutParams(dp(52), dp(52)))
+        }
+        brushLabel = TextView(this).apply { textSize = 16f; setTextColor(Color.BLACK)
+            gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, 0, 0) }
+        drawingTools.addView(brushLabel, LinearLayout.LayoutParams(0, dp(52), 1f))
+        root.addView(drawingTools)
+        updateBrushControls()
         canvasArea = FrameLayout(this)
         canvasArea.addView(surface, FrameLayout.LayoutParams(-1, -1))
         val gestureIndicator = GestureIndicator(this, adapter::setIndicatorFastRefresh)
@@ -139,7 +162,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=eraser-toolbar-v1")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -180,6 +203,40 @@ class MainActivity : Activity() {
         Toast.makeText(this, "Finish drawing or navigation before changing history.", Toast.LENGTH_SHORT).show()
     }
 
+    private fun brushBusy(): Boolean {
+        if (!surface.isDrawing && !surface.isNavigating && !adapter.isBusy) return false
+        Toast.makeText(this, "Finish drawing or navigation before changing brushes.", Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    private fun changeBrush(settings: BrushSettings): Boolean {
+        if (brushBusy()) return false
+        if (!surface.selectBrush(settings)) return false
+        brushStore.save(settings)
+        updateBrushControls()
+        return true
+    }
+
+    private fun updateBrushControls() {
+        val settings = checkNotNull(surface.brush.settings)
+        brushButtons.forEach { (preset, button) ->
+            button.isChecked = preset.id == settings.presetId
+            button.tooltipText = if (button.isChecked) "${preset.label} · tap again for settings" else preset.label
+        }
+        brushLabel.text = "${settings.preset.label} · ${settings.size} px${if (settings.pressure) " max" else ""}"
+        brushLabel.contentDescription = "${brushLabel.text}. Tap the selected tool for settings."
+        if (!surface.brush.isEraser) brushLabel.text = "${brushLabel.text} · ${settings.shade.label}"
+    }
+
+    private fun editBrush() {
+        if (brushBusy()) return
+        penConfigurationGeneration++
+        adapter.close()
+        surface.inputEnabled = false
+        BrushSettingsDialog.show(this, checkNotNull(surface.brush.settings), apply = ::changeBrush)
+            .setOnDismissListener { schedulePenConfiguration() }
+    }
+
     private fun schedulePenConfiguration() {
         val generation = ++penConfigurationGeneration
         // Let heading/control invalidations reach a display frame before hardware scribble
@@ -216,6 +273,7 @@ class MainActivity : Activity() {
             .put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
             .put("rotationDegrees", transform.rotationDegrees)
             .put("mode", if (surface.rawInput) "boox" else "android")
+            .put("nativePreviewSupported", NativePreviewPolicy.supports(surface.brush))
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
             .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
@@ -249,7 +307,7 @@ class MainActivity : Activity() {
             else { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() }
         }
     }
-    override fun onDestroy() { adapter.close(); surface.dispose(); super.onDestroy() }
+    override fun onDestroy() { adapter.close(); surface.dispose(); strokeDiagnostics.close(); super.onDestroy() }
 
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
@@ -308,38 +366,55 @@ class MainActivity : Activity() {
         val samples = stroke.samples
         val source = stroke.source
         strokeCount++
+        // Snapshot metadata on the UI thread. Worker never reads document pixels or live UI state.
+        val number = strokeCount
+        val document = checkNotNull(surface.document)
+        val documentId = document.id
+        val layerId = document.layerId
+        val spec = document.spec
+        val transform = surface.viewport.transform
+        val viewWidth = surface.width
+        val viewHeight = surface.height
+        val wallTime = System.currentTimeMillis()
+        val logFile = File(filesDir, "strokes.jsonl")
+        strokeDiagnostics.submit {
         val points = JSONArray()
         samples.forEach { p -> points.put(JSONArray().put(p.x).put(p.y).put(p.pressure).put(p.time).put(p.rawPressure)
             .put(p.tiltRadians ?: JSONObject.NULL).put(p.viewOrientationRadians ?: JSONObject.NULL)
             .put(p.rawTiltX ?: JSONObject.NULL).put(p.rawTiltY ?: JSONObject.NULL)) }
         val range = JSONObject().put("min", stroke.pressureRange.min).put("max", stroke.pressureRange.max)
             .put("origin", stroke.pressureRange.origin)
-        val brush = JSONObject().put("minWidthPx", surface.brush.minWidth).put("maxWidthPx", surface.brush.maxWidth)
-            .put("curve", "linear").put("widthModifier", surface.brush.widthModifier.id)
-            .put("maxWidthMultiplier", surface.brush.widthModifier.maxMultiplier)
-            .put("maxRenderedWidthPx", surface.brush.maxRenderedWidth)
-        val document = checkNotNull(surface.document)
-        val transform = surface.viewport.transform
-        val entry = JSONObject().put("schemaVersion", 5).put("source", source).put("stroke", strokeCount)
+        val captured = stroke.brush
+        val brush = JSONObject().put("minWidthPx", captured.minWidth).put("maxWidthPx", captured.maxWidth)
+            .put("curve", "linear").put("widthModifier", captured.widthModifier.id)
+            .put("maxWidthMultiplier", captured.widthModifier.maxMultiplier)
+            .put("maxRenderedWidthPx", captured.maxRenderedWidth)
+            .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
+            .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
+            .put("settingsVersion", 2).put("preview", if (source == "boox") "native-round-width" else "app-round-brush")
+            .put("operation", if (captured.isEraser) "erase" else "paint")
+            .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))
+        val entry = JSONObject().put("schemaVersion", 8).put("source", source).put("stroke", number)
             .put("pressureRange", range).put("brush", brush)
-            .put("documentId", document.id).put("layerId", document.layerId)
-            .put("coordinateSpace", "document").put("canvasWidth", document.spec.width).put("canvasHeight", document.spec.height)
-            .put("viewWidth", surface.width).put("viewHeight", surface.height)
+            .put("documentId", documentId).put("layerId", layerId)
+            .put("coordinateSpace", "document").put("canvasWidth", spec.width).put("canvasHeight", spec.height)
+            .put("viewWidth", viewWidth).put("viewHeight", viewHeight)
             .put("viewport", JSONObject().put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
                 .put("rotationDegrees", transform.rotationDegrees))
-            .put("wallTimeMs", System.currentTimeMillis()).put("points", points)
-        try { File(filesDir, "strokes.jsonl").appendText("$entry\n") }
+            .put("wallTimeMs", wallTime).put("points", points)
+        try { logFile.appendText("$entry\n") }
         catch (error: Exception) { Log.e("BooxProbe", "Stroke log write failed", error) }
         val low = (samples.minOf { it.pressure } * 100).toInt()
         val high = (samples.maxOf { it.pressure } * 100).toInt()
-        val message = "Stroke $strokeCount · $source · ${samples.size} points · pressure $low–$high%"
+        val message = "Stroke $number · $source · ${samples.size} points · pressure $low–$high%"
         val tilts = samples.mapNotNull { it.tiltRadians }
         val tiltInfo = if (tilts.isEmpty()) "tilt unavailable" else
             "tilt ${Math.toDegrees(tilts.min().toDouble()).toInt()}-${Math.toDegrees(tilts.max().toDouble()).toInt()} deg"
-        status.text = "$message | $tiltInfo"
+        status.post { if (!isDestroyed && resumed && number == strokeCount) status.text = "$message | $tiltInfo" }
         Log.i("BooxProbe", "$tiltInfo rawTiltX=${samples.mapNotNull { it.rawTiltX }.let { it.minOrNull() to it.maxOrNull() }} rawTiltY=${samples.mapNotNull { it.rawTiltY }.let { it.minOrNull() to it.maxOrNull() }}")
-        val outside = samples.count { it.x < 0 || it.y < 0 || it.x >= document.spec.width || it.y >= document.spec.height }
+        val outside = samples.count { it.x < 0 || it.y < 0 || it.x >= spec.width || it.y >= spec.height }
         Log.i("BooxProbe", "$message raw=${samples.minOf { it.rawPressure }}–${samples.maxOf { it.rawPressure }} max=${stroke.pressureRange.max} outside=$outside")
+        }
     }
 
     private fun export(): Boolean {

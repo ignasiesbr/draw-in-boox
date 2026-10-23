@@ -184,6 +184,12 @@ Layer-panel design, document browsing, and advanced blend modes are deferred.
 
 ## 6. Customizable toolbar
 
+Current toolbar follow-up (2026-10-23): Ink/Tilt/Marker/Eraser are implemented.
+Tap the selected tool again for settings; separate brush action icons are removed.
+Round Eraser supports 1–128px, selected-layer transparency and undo/redo. Physical
+eraser-end/button routing remains deferred. Wide/gray Marker app-preview lag is a
+documented current limitation; see docs/BRUSHES.md and docs/PERFORMANCE.md.
+
 **Purpose:** let the user adapt frequently used actions after the underlying tools and commands are established.
 
 Prepare early by giving actions stable IDs and separating command handling from `MainActivity` button creation. Implement customization after the initial zoom, pen, and layer actions exist.
@@ -219,3 +225,8 @@ Per-layer settings added: thumbnail long-press opens an opacity draft slider (0-
 Alpha lock delivered in layer settings: preserve pixel alpha during strokes, combined opacity/alpha-lock Apply/Cancel, undo/redo and persistence. Clear is protected; BOOX preview masking is applied at pen-up.
 
 Brush preparation: tilt capture and replaceable width dynamics implemented, with wider tilted strokes and pressure retained. Build/lint and full device tests pass; physical tilt response pending. See docs/BRUSHES.md before the full brush-engine milestone.
+# Brush milestone update — 2026-10-23
+
+Initial preset system and dedicated drawing toolbar implemented: Ink, Tilt (accepted default), Monoline, persisted per-preset size/dynamics and Apply/Cancel settings. Both input paths capture brush settings for the stroke; the BOOX preview keeps app-width PENCIL and the existing pressure/tilt calculation. Size remains 1–12 document pixels with optional 2.5× tilt widening. See docs/BRUSHES.md and docs/BRUSH_ENGINE_PLAN.md. This supersedes older generic native-style guidance below: do not combine app-computed pressure width with FOUNTAIN. Earlier tilt-only verification status is also superseded by the physically accepted shared-width bridge documented in BRUSHES.md. Layer rename/opacity/alpha lock are implemented despite older milestone text below. Advanced brushes, erasing, preset import/export and configurable toolbar placement remain deferred; physical testing of the new preset UI and live/final appearance is pending.
+
+# Verified brush increment (2026-10-23): build/lint pass (0 lint errors), full device instrumentation passes including baseline pixel equality, preset persistence, captured commits, history and dialog validation. The new presets still require physical live/final comparison.

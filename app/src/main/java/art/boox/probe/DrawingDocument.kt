@@ -120,10 +120,12 @@ class DrawingDocument(val spec: CanvasSpec, initialLayers: List<RasterLayer>,
         canvas.drawBitmap(cache, 0f, 0f, paint)
     }
     /** Group opacity: an in-progress stroke and its existing layer fade together. */
-    fun drawLayer(canvas: Canvas, layer: RasterLayer, paint: Paint? = null, pending: ((Canvas) -> Unit)? = null) {
+    fun drawLayer(canvas: Canvas, layer: RasterLayer, paint: Paint? = null, pending: ((Canvas) -> Unit)? = null,
+        isolatePending: Boolean = false) {
         if (!layer.visible || layer.opacity == 0) return
         val alpha = (layer.opacity * 255 + 50) / 100
-        if (pending != null && (alpha < 255 || layer.alphaLocked)) {
+        // CLEAR must act on this layer alone, never on paper or lower layers.
+        if (pending != null && (alpha < 255 || layer.alphaLocked || isolatePending)) {
             val saved = canvas.saveLayerAlpha(0f, 0f, spec.width.toFloat(), spec.height.toFloat(), alpha)
             try { canvas.drawBitmap(layer.bitmap, 0f, 0f, paint); pending(canvas) }
             finally { canvas.restoreToCount(saved) }

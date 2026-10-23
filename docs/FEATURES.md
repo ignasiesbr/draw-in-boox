@@ -1,5 +1,33 @@
 # Feature maintenance guide
 
+Current brush UI: tap a tool to select; tap the selected tool to edit size/dynamics/
+shade. No separate right-side brush actions. Eraser (`eraser` ID) is a fixed round
+1–128px CLEAR brush with its own saved size and Erase history label. It respects
+layer locks/alpha lock, always uses app preview, and isolates pending erase geometry
+from paper/lower layers. See BRUSHES.md, EraserChecks and AsyncSurfaceChecks. Preserve
+the native preview safety gate and accepted black-ink performance architecture.
+
+Native safety policy now gates TouchHelper creation: gray/wide brushes use app live
+preview; only black brushes with maxRenderedWidth <=30px enter the native path.
+Native setters run paused, enable last; constant brushes receive no begin/move width
+setter. Software live frames include pending strokes, coalesce snapshots in flight
+and use the worker on both moves and pen-up. See NATIVE_PREVIEW_SAFETY.md; preserving
+the original fast black input path does not mean re-enabling the failed gray shader.
+
+Marker/shade increment: Marker keeps stored ID `monoline` and widens its size range to 128px. `round-marker` draws one round-capped Path for constant-width Marker; pressure/tilt brushes retain continuous-round geometry. `InkShade.kt` defines opaque tones; `InkShadePicker.kt` owns shared draft swatches/dialogs. Shade is global in app preferences (v2), size/dynamics per-preset. Captured brushes carry color through bitmap draw, native color setup and schema-7 diagnostics. Never implement gray as reduced alpha or add per-sample color setters. See BRUSHES.md and MarkerChecks; the accepted asynchronous pipeline remains unchanged.
+
+Physical performance acceptance: on 2026-10-23 the user reported an "incredible difference" with `async-handoff-v1`. Preserve the combined architecture described below and the regression rules in AGENTS.md. Future changes need ordinary-fast and very-fast pen testing; the prior 150ms policy behaved differently at those two cadences.
+
+Current BOOX presentation (`async-handoff-v1`): final reconciliation waits for a 450ms gap, then prepares immutable pixels on UI and uses `AsyncSurfacePresentation` for SurfaceHolder lock/draw/post on a worker. The worker owns its screen cache and receives no live document/layer bitmaps. Epochs, a bounded mailbox and unioned unacknowledged bounds preserve lifecycle/order. Native reset is postponed again if writing resumes before paint completion. SDK View/native setters remain on UI. Synchronous UI frames invalidate worker epochs and share a canvas gate; see PERFORMANCE.md and AsyncSurfaceChecks for limits and pixel comparison tolerance. This supersedes older 150ms/synchronous handoff wording below.
+
+Historical 150ms policy: combined screen handoffs improved very fast writing, but the user still observed delays at ordinary fast cadence. It is superseded by the accepted asynchronous/450ms pipeline above. PERFORMANCE.md retains the measurements and rationale.
+
+Latest handoff optimization: upright commits use `StrokeDirtyBounds` and `lockCanvas(dirty)`, honoring Android's expanded returned region; rotated/navigation/history frames stay full. `drawFrame` is shared and pixel-tested. On bitmap handoff `BooxPenAdapter` toggles only rendering, retaining the digitizer reader, then reapplies black/base width/PENCIL. Full open/close remains unchanged. Initial width is inline on UI because SFTouchRender already posts callbacks there. See PERFORMANCE.md; these details supersede the older per-stroke full-input-toggle wording below.
+
+Performance maintenance: history reuses transaction-local compression buffers. `StrokeDiagnostics` bounds background JSON/file work; capture UI metadata before enqueueing and never pass mutable document pixels to the worker. `BooxPerf` stage summaries and the isolated device benchmark are documented in PERFORMANCE.md.
+
+Brush toolbar integration: `BrushPreset.kt` owns built-in preset IDs, immutable settings/compilation and versioned preferences; `BrushSettingsDialog.kt` owns draft controls. `MainActivity` dispatches stable `brush.*` action tags through guarded handlers and uses `EinkIconButton` for selection. Preserve per-stroke brush capture in both input paths and adapter contact-to-handoff busy protection. See BRUSHES.md for schema 6 and preview restrictions. The current first engine remains the existing continuous round renderer; toolbar customization and advanced dab brushes are deferred.
+
 Read this when continuing layers, shared UI, settings, or navigation. It documents the working implementation and regression traps, rather than a proposed redesign. Last reviewed 2026-10-23; the user confirmed the layer UI/settings build works very well.
 
 Start with [HANDOFF.md](HANDOFF.md) for current state and accepted limitations, [PROBE.md](PROBE.md) for Windows/ADB commands and diagnostics, and [../plan.md](../plan.md) for feature priorities. [EINK_UI.md](EINK_UI.md) contains UI conventions and research sources. Production Kotlin files below are under `app/src/main/java/art/boox/probe/`; device checks are under `app/src/androidTest/java/art/boox/probe/`.

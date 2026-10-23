@@ -20,7 +20,9 @@ class RasterSurface(
     var document: DrawingDocument? = null
         private set
     val viewport = DocumentViewport()
-    val brush = PressureBrush()
+    var brush = BrushSettings().compile()
+        private set
+    private var strokeBrush = brush
     val history = EditHistory()
     var historyChanged: (() -> Unit)? = null
     var historyFeedback: ((String) -> Unit)? = null
@@ -35,9 +37,19 @@ class RasterSurface(
     val canDraw: Boolean get() = document?.canPaint == true
     var layersChanged: (() -> Unit)? = null
     private var framePending = false
-    private val frame = Runnable { framePending = false; render() }
+    private var softwareFrameInFlight = false
+    private var softwareNeedsFrame = false
+    private var softwareDirty: RectF? = null
+    private var softwareEpoch = 0L
+    private val frame = Runnable { renderScheduledFrame() }
     private val paper = Paint().apply { color = Color.WHITE }
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val surfacePaintLock = Any()
+    @Volatile private var frameEpoch = 0L
+    private var asyncPainter: AsyncSurfacePresentation? = null
+    private var asyncCacheEpoch = -1L
+    private var asyncSequence = 0L
+    private var asyncDirty: Rect? = null
     private var loadFailed = false
     var inputEnabled = true
         set(value) { field = value; if (!value) { historyTaps.cancel(); gestures.cancel(); cancelStroke() } }
@@ -115,7 +127,7 @@ class RasterSurface(
     init { tag = "Drawing surface"; holder.addCallback(this) }
 
     override fun surfaceCreated(holder: SurfaceHolder) = render()
-    override fun surfaceDestroyed(holder: SurfaceHolder) { historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke() }
+    override fun surfaceDestroyed(holder: SurfaceHolder) { invalidateAsyncFrames(); historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke() }
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         if (width <= 0 || height <= 0 || loadFailed) return
         historyTaps.cancel()
@@ -176,18 +188,35 @@ class RasterSurface(
     fun beginRawStroke() { historyTaps.cancel(); rawStroke = true }
     fun endRawStroke() { rawStroke = false }
 
+    fun selectBrush(settings: BrushSettings): Boolean {
+        if (isDrawing || isNavigating) return false
+        val compiled = settings.compile()
+        viewportWillChange?.invoke()
+        brush = compiled
+        ready?.invoke()
+        return true
+    }
+
     /** Samples committed here are always in document pixels. */
     fun commit(samples: List<PenSample>, source: String, range: PressureRange = PressureRange.ANDROID_DEFAULT,
-        expectedLayerId: String? = null) {
-        val current = document ?: return
-        if (!current.canPaint || (expectedLayerId != null && current.layerId != expectedLayerId)) { render(); return }
+        expectedLayerId: String? = null, capturedBrush: PressureBrush = brush,
+        deferPresentation: Boolean = false): RectF? {
+        val current = document ?: return null
+        if (!current.canPaint || (expectedLayerId != null && current.layerId != expectedLayerId)) { render(); return null }
         val valid = samples.filter { it.x.isFinite() && it.y.isFinite() }
-        if (valid.isEmpty()) return
+        if (valid.isEmpty()) return null
+        val started = StrokePerformance.now()
         historyTaps.cancel()
-        history.execute(current, StrokeEdit(valid, brush))
+        history.execute(current, StrokeEdit(valid, capturedBrush))
+        val edited = StrokePerformance.now()
         historyChanged?.invoke()
-        render()
-        strokeFinished(PenStroke(valid, source, range))
+        val notified = StrokePerformance.now()
+        val dirty = StrokeDirtyBounds.document(valid, capturedBrush.maxRenderedWidth)
+        if (!deferPresentation) render(dirty)
+        val rendered = StrokePerformance.now()
+        strokeFinished(PenStroke(valid, source, range, capturedBrush))
+        StrokePerformance.log("commit source=$source samples=${valid.size} deferred=$deferPresentation historyMs=${StrokePerformance.ms(started, edited)} controlsMs=${StrokePerformance.ms(edited, notified)} renderMs=${StrokePerformance.ms(notified, rendered)} diagnosticsMs=${StrokePerformance.ms(rendered)} totalMs=${StrokePerformance.ms(started)}")
+        return dirty
     }
 
     fun selectLayer(id: String): Boolean {
@@ -218,12 +247,14 @@ class RasterSurface(
     }
 
     fun dispose() {
+        invalidateAsyncFrames(); asyncPainter?.close(); asyncPainter = null
         inputEnabled = false; cancelStroke(); history.clear()
         document?.recycle(); document = null
     }
 
     fun cancelStroke() {
         val hadPreview = pending.isNotEmpty()
+        softwareEpoch++; softwareFrameInFlight = false; softwareNeedsFrame = false; softwareDirty = null
         pending.clear(); activePointer = -1; rawStroke = false
         removeCallbacks(frame); framePending = false
         if (hadPreview) render()
@@ -268,10 +299,93 @@ class RasterSurface(
         }
     }
 
-    fun render() {
-        if (!holder.surface.isValid) return
-        val canvas = holder.lockCanvas() ?: return
+    private fun invalidateAsyncFrames() {
+        frameEpoch++; asyncSequence++; asyncCacheEpoch = -1L; asyncDirty = null
+    }
+
+    internal fun cancelAsyncPresentation(): Boolean {
+        val pending = asyncDirty != null
+        invalidateAsyncFrames()
+        return pending
+    }
+
+    /** Snapshot only pixels on UI; SurfaceHolder lock/draw/post run on a worker.
+     * A full snapshot seeds the screen cache after any synchronous frame/view change. */
+    internal fun renderAsync(dirtyDocument: RectF, complete: (Boolean) -> Unit) {
+        if (!holder.surface.isValid || width <= 0 || height <= 0) { complete(false); return }
+        val started = StrokePerformance.now()
+        val epoch = frameEpoch
+        val dirty = if (asyncCacheEpoch != epoch) Rect(0, 0, width, height)
+            else StrokeDirtyBounds.view(dirtyDocument, viewport.transform, width, height)
+        if (dirty.isEmpty) { complete(true); return }
+        asyncDirty?.let { dirty.union(it) }
+        asyncDirty = Rect(dirty)
+        val sequence = ++asyncSequence
+        val current = document ?: run { complete(false); return }
+        val fullSnapshot = dirty == Rect(0, 0, width, height)
+        val snapshotWidth = if (fullSnapshot) current.spec.width else dirty.width()
+        val snapshotHeight = if (fullSnapshot) current.spec.height else dirty.height()
+        val available = Runtime.getRuntime().let { it.maxMemory() - it.totalMemory() + it.freeMemory() }
+        val snapshotBytes = snapshotWidth.toLong() * snapshotHeight * 4
+        if (available < snapshotBytes * 2 + width.toLong() * height * 4 + 8L * 1024 * 1024) {
+            StrokePerformance.log("asyncSnapshot fallback=memory")
+            render(dirtyDocument); complete(true); return
+        }
+        val pixels = try { Bitmap.createBitmap(snapshotWidth, snapshotHeight, Bitmap.Config.ARGB_8888) }
+            catch (_: OutOfMemoryError) { render(dirtyDocument); complete(true); return }
         try {
+            val target = Canvas(pixels)
+            if (fullSnapshot) drawDocument(target, current)
+            else {
+                target.translate(-dirty.left.toFloat(), -dirty.top.toFloat())
+                target.clipRect(dirty)
+                drawFrame(target)
+            }
+        } catch (error: Throwable) { pixels.recycle(); throw error }
+        StrokePerformance.log("asyncSnapshot full=$fullSnapshot pixels=${pixels.width.toLong() * pixels.height} uiMs=${StrokePerformance.ms(started)}")
+        val painter = asyncPainter ?: AsyncSurfacePresentation(holder, surfacePaintLock,
+            valid = { it == frameEpoch }, uiPost = { post(it) }).also { asyncPainter = it }
+        painter.submit(AsyncSurfacePresentation.Frame(pixels, dirty, width, height, epoch,
+            documentTransform = if (fullSnapshot) viewport.transform else null, complete = { success ->
+            if (epoch != frameEpoch || sequence != asyncSequence) { complete(false) }
+            else {
+                if (success) { asyncCacheEpoch = epoch; asyncDirty = null }
+                else { // Recover with the existing synchronous painter if the worker failed.
+                    render(dirtyDocument)
+                }
+                complete(true)
+            }
+        }))
+    }
+
+    fun render(dirtyDocument: RectF? = null) {
+        invalidateAsyncFrames()
+        synchronized(surfacePaintLock) { renderSynchronous(dirtyDocument) }
+    }
+
+    private fun renderSynchronous(dirtyDocument: RectF? = null) {
+        if (!holder.surface.isValid) return
+        val requested = dirtyDocument?.let { StrokeDirtyBounds.view(it, viewport.transform, width, height) }
+        if (requested?.isEmpty == true) return
+        val requestedPixels = requested?.let { it.width().toLong() * it.height() } ?: width.toLong() * height
+        val started = StrokePerformance.now()
+        // SurfaceHolder may expand this rectangle for buffer preservation. Respect its
+        // returned rectangle rather than clipping to the original request.
+        val canvas = (if (requested == null) holder.lockCanvas() else holder.lockCanvas(requested)) ?: return
+        val locked = StrokePerformance.now()
+        var drawn = locked
+        try {
+            if (requested != null) canvas.clipRect(requested)
+            drawFrame(canvas)
+        } finally {
+            drawn = StrokePerformance.now()
+            holder.unlockCanvasAndPost(canvas)
+            StrokePerformance.log("surface requestedPixels=$requestedPixels actualPixels=${requested?.let { it.width().toLong() * it.height() } ?: width.toLong() * height} lockMs=${StrokePerformance.ms(started, locked)} drawMs=${StrokePerformance.ms(locked, drawn)} postMs=${StrokePerformance.ms(drawn)}")
+        }
+    }
+
+    /** Shared frame painter; caller owns surface locking and any dirty-region clip. */
+    internal fun drawFrame(canvas: Canvas) {
             canvas.drawColor(Color.LTGRAY)
             val current = document ?: return
             val saved = canvas.save()
@@ -280,16 +394,46 @@ class RasterSurface(
                 canvas.concat(transform.matrix())
                 canvas.drawRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat(), paper)
                 canvas.clipRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat())
-                if (pending.isEmpty()) current.drawComposite(canvas, bitmapPaint)
-                else current.layers.forEach { layer ->
-                    current.drawLayer(canvas, layer, bitmapPaint,
-                        if (layer.id == strokeLayerId) ({ target -> brush.draw(target, pending, layer.alphaLocked) }) else null)
-                }
+                drawDocument(canvas, current)
             } finally { canvas.restoreToCount(saved) }
-        } finally { holder.unlockCanvasAndPost(canvas) }
+    }
+
+    private fun drawDocument(canvas: Canvas, current: DrawingDocument) {
+        if (pending.isEmpty()) current.drawComposite(canvas, bitmapPaint)
+        else current.layers.forEach { layer ->
+            current.drawLayer(canvas, layer, bitmapPaint,
+                if (layer.id == strokeLayerId) ({ target -> strokeBrush.draw(target, pending, layer.alphaLocked) }) else null,
+                isolatePending = strokeBrush.isEraser)
+        }
+    }
+
+    private fun renderScheduledFrame() {
+        framePending = false
+        if (!softwareNeedsFrame) { render(); return }
+        if (softwareFrameInFlight) return
+        softwareNeedsFrame = false
+        if (pending.isNotEmpty()) {
+            StrokeDirtyBounds.document(pending, strokeBrush.maxRenderedWidth)?.let { bounds ->
+                softwareDirty?.union(bounds) ?: run { softwareDirty = bounds }
+            }
+        }
+        val dirty = softwareDirty ?: return
+        softwareDirty = null
+        val epoch = softwareEpoch
+        softwareFrameInFlight = true
+        renderAsync(dirty) {
+            if (epoch == softwareEpoch) {
+                softwareFrameInFlight = false
+                if (softwareNeedsFrame) requestFrame()
+            }
+        }
     }
 
     private fun requestFrame() {
+        if (pending.isNotEmpty()) softwareNeedsFrame = true
+        // Keep Android live ink bounded to one snapshot in flight. Moves update the
+        // sample list while the worker paints; its completion snapshots the latest.
+        if (softwareNeedsFrame && softwareFrameInFlight) return
         if (!framePending) { framePending = true; postOnAnimation(frame) }
     }
 
@@ -309,6 +453,7 @@ class RasterSurface(
                 activePointer = event.getPointerId(actionIndex)
                 strokeTransform = viewport.transform
                 strokeLayerId = document?.layerId
+                strokeBrush = brush
                 val axis = event.device?.getMotionRange(MotionEvent.AXIS_PRESSURE, event.source)
                 pressureRange = if (axis != null && axis.min.isFinite() && axis.max.isFinite() && axis.max > axis.min)
                     PressureRange(axis.min, axis.max, "android-motion-range") else PressureRange.ANDROID_DEFAULT
@@ -332,7 +477,11 @@ class RasterSurface(
             val samples = pending.toList()
             pending.clear(); activePointer = -1
             removeCallbacks(frame); framePending = false
-            commit(samples, "android", pressureRange, strokeLayerId)
+            commit(samples, "android", pressureRange, strokeLayerId, strokeBrush, deferPresentation = true)?.let { dirty ->
+                softwareDirty?.union(dirty) ?: run { softwareDirty = dirty }
+                softwareNeedsFrame = true
+                requestFrame()
+            }
             performClick()
         } else requestFrame()
         return true

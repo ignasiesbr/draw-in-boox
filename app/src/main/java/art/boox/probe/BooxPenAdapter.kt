@@ -1,8 +1,9 @@
 package art.boox.probe
 
-import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.RectF
 import android.util.Log
+import android.os.Looper
 import com.onyx.android.sdk.api.device.epd.EpdController
 import com.onyx.android.sdk.data.note.TouchPoint
 import com.onyx.android.sdk.pen.RawInputCallback
@@ -12,8 +13,11 @@ import com.onyx.android.sdk.pen.data.TouchPointList
 /** SDK linkage and firmware failures leave the standard Android input path available. */
 class BooxPenAdapter(private val view: RasterSurface, private val status: (String) -> Unit) {
     private var helper: TouchHelper? = null
-    private var generation = 0
+    @Volatile private var generation = 0
     private var liveWidth: LivePreviewWidth? = null
+    private var presentation: StrokePresentation? = null
+    @Volatile private var awaitingStrokeCommit = false
+    val isBusy: Boolean get() = awaitingStrokeCommit
     private fun failure(error: Throwable) {
         Log.e("BooxProbe", "BOOX SDK failure", error)
         close()
@@ -23,6 +27,11 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
     fun open(): Boolean {
         close()
         if (!view.canDraw) return false
+        if (!NativePreviewPolicy.supports(view.brush)) {
+            Log.i("BooxProbe", "App brush preview: firmware shader workaround colorArgb=${Integer.toHexString(view.brush.inkColor)} maxDocumentWidth=${view.brush.maxRenderedWidth}")
+            status(if (view.brush.isEraser) "App preview · eraser" else "App preview · gray or wide brush")
+            return false
+        }
         return try {
             val maximum = EpdController.getMaxTouchPressure()
             check(maximum.isFinite() && maximum > 0f) { "Firmware pressure maximum is invalid: $maximum" }
@@ -58,6 +67,10 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
 
     fun close() {
         generation++
+        val pendingPixels = presentation?.cancel()
+        val pendingFrame = view.cancelAsyncPresentation()
+        presentation = null
+        awaitingStrokeCommit = false
         liveWidth?.finish(); liveWidth = null
         val previous = helper
         helper = null
@@ -65,6 +78,9 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         try { previous?.setRawDrawingEnabled(false); previous?.closeRawDrawing() }
         catch (error: LinkageError) { Log.w("BooxProbe", "Closing raw input", error) }
         catch (error: Exception) { Log.w("BooxProbe", "Closing raw input", error) }
+        // Selection/layout/lifecycle can end a burst before the quiet timer fires.
+        // Pixels are already committed; publish them after native drawing is closed.
+        if (pendingFrame) view.render() else if (pendingPixels != null) view.render(pendingPixels)
     }
 
     fun refresh() {
@@ -82,21 +98,58 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         catch (error: Exception) { Log.w("BooxProbe", "Angle indicator uses normal refresh", error) }
     }
 
-    private fun resumePreview(target: TouchHelper) {
-        target.setRawDrawingEnabled(true)
-        // The app now supplies pressure+tilt width during each stroke. PENCIL avoids
-        // applying the firmware fountain pressure curve a second time. Reapply after
-        // every handoff; do not reopen the renderer for individual width updates.
+    private fun resumePreview(target: TouchHelper, handoff: Boolean = false) {
+        check(NativePreviewPolicy.supports(view.brush)) { "Brush is outside the validated native preview policy" }
+        val started = StrokePerformance.now()
         val width = view.brush.maxWidth * view.viewport.transform.scale
-        target.setStrokeColor(Color.BLACK)
-            .setStrokeWidth(width)
-            .setStrokeStyle(TouchHelper.STROKE_STYLE_PENCIL)
-        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale}")
+        // Explicitly enable the reader on first open; the SDK call is a no-op when
+        // already enabled at handoff. Shader parameters are set with rendering paused.
+        NativePreviewConfiguration.apply(width, view.brush.inkColor,
+            rendering = { target.setRawDrawingRenderEnabled(it) },
+            setColor = { target.setStrokeColor(it) }, setWidth = { target.setStrokeWidth(it) },
+            setPencil = { target.setStrokeStyle(TouchHelper.STROKE_STYLE_PENCIL) },
+            enableInput = { target.setRawInputReaderEnable(true) })
+        StrokePerformance.log("nativeResume handoff=$handoff configuredWhilePaused=true totalMs=${StrokePerformance.ms(started)}")
+        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(view.brush.inkColor)}")
     }
 
     private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {
-        val width = LivePreviewWidth(widthForSample = { view.brush.width(it) * transform.scale },
-            post = { task, delay -> view.postDelayed(task, delay) }, remove = { view.removeCallbacks(it) },
+        val capturedBrush = view.brush
+        var presentationTicket = 0L
+        lateinit var presenter: StrokePresentation
+        presenter = StrokePresentation(post = { task, delay -> view.postDelayed(task, delay) },
+            remove = { view.removeCallbacks(it) }, present = { bounds, strokes ->
+                if (session == generation && view.inputEnabled && view.rawInput) {
+                    val ticket = ++presentationTicket
+                    val started = StrokePerformance.now()
+                    view.renderAsync(bounds) { success ->
+                        if (session == generation && ticket == presentationTicket && view.inputEnabled && view.rawInput) {
+                            if (!success || presenter.isBusy || awaitingStrokeCommit) {
+                                presenter.restore(bounds, strokes)
+                                StrokePerformance.log("presentation deferredAgain=true strokes=$strokes reason=writing-or-stale-frame")
+                            } else {
+                                val resumeStarted = StrokePerformance.now()
+                                try { helper?.let { resumePreview(it, handoff = true) } }
+                                catch (error: Exception) { failure(error) }
+                                catch (error: LinkageError) { failure(error) }
+                                StrokePerformance.log("presentation strokes=$strokes quietMs=${StrokePresentation.QUIET_MS} asyncElapsedMs=${StrokePerformance.ms(started, resumeStarted)} resumeMs=${StrokePerformance.ms(resumeStarted)}")
+                            }
+                        }
+                    }
+                }
+            })
+        presentation = presenter
+        fun onUi(block: () -> Unit) {
+            if (Looper.myLooper() == Looper.getMainLooper()) block() else view.post { block() }
+        }
+        val width = LivePreviewWidth.forBrush(capturedBrush, transform.scale,
+            post = { task, delay ->
+                // The pinned SFTouchRender already posts raw callbacks onto the UI thread.
+                // Reposting begin let queued move/end callbacks cancel it before any width
+                // was sent for short strokes. Apply begin immediately when already on UI.
+                if (delay == 0L && Looper.myLooper() == Looper.getMainLooper()) task.run()
+                else view.postDelayed(task, delay)
+            }, remove = { view.removeCallbacks(it) },
             apply = { pixels ->
                 if (session == generation && view.inputEnabled && view.rawInput) {
                     try { helper?.setStrokeWidth(pixels) }
@@ -110,27 +163,40 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         return object : RawInputCallback() {
             private var moves = 0
             override fun onBeginRawDrawing(b: Boolean, p: TouchPoint) {
+                if (session != generation) return
+                awaitingStrokeCommit = true
                 moves = 0
-                width.begin(sample(p))
-                view.post { if (session == generation && view.inputEnabled && view.rawInput) view.beginRawStroke() }
-                Log.d("BooxProbe", "raw begin x=${p.x} y=${p.y} pressure=${p.pressure}")
+                width?.begin(sample(p))
+                onUi { if (session == generation && view.inputEnabled && view.rawInput) {
+                    presenter.begin(); view.beginRawStroke()
+                } }
+                Log.d("BooxProbe", "raw begin x=${p.x} y=${p.y} pressure=${p.pressure} pointTime=${p.timestamp} callbackWallTime=${System.currentTimeMillis()}")
             }
             override fun onEndRawDrawing(b: Boolean, p: TouchPoint) {
-                width.finish()
-                view.post { if (session == generation) view.endRawStroke() }
+                if (session != generation) return
+                width?.finish()
+                onUi { if (session == generation) {
+                    view.endRawStroke(); presenter.end()
+                } }
                 Log.d("BooxProbe", "raw end x=${p.x} y=${p.y} pressure=${p.pressure}")
             }
             override fun onRawDrawingTouchPointMoveReceived(p: TouchPoint) {
-                moves++; width.update(sample(p))
+                if (session != generation) return
+                moves++; width?.update(sample(p))
             }
             override fun onRawDrawingTouchPointListReceived(points: TouchPointList) {
-                width.finish()
-                Log.d("BooxProbe", "Live width preview moves=$moves widthUpdates=${width.appliedCount} sentWidthPx=${width.appliedRange}")
+                if (session != generation) return
+                val received = StrokePerformance.now()
+                width?.finish()
+                Log.d("BooxProbe", "Live width preview moves=$moves widthUpdates=${width?.appliedCount ?: 0} fixedWidth=${width == null} sentWidthPx=${width?.appliedRange}")
+                StrokePerformance.log("liveWidth moves=$moves updates=${width?.appliedCount ?: 0} fixedWidth=${width == null} maxScheduleLatenessMs=${width?.maxScheduleLatenessMs ?: 0.0} maxSetterMs=${width?.maxApplyMs ?: 0.0}")
                 val samples = points.points.map {
                     transform.map(PenSample(it.x, it.y, range.normalize(it.pressure), it.timestamp, it.pressure,
                         PenTilt.boox(it.tiltX, it.tiltY), rawTiltX = it.tiltX, rawTiltY = it.tiltY))
                 }
-                view.post {
+                val mapped = StrokePerformance.now()
+                onUi {
+                    val dequeued = StrokePerformance.now()
                     // Do not commit a callback queued by an old mode, surface, or paused activity.
                     if (session == generation && view.inputEnabled && view.rawInput) {
                         // Raw input uses the bounding rectangle; strokes starting in a gray
@@ -139,13 +205,11 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
                         val spec = view.document?.spec
                         if (first != null && spec != null && first.x >= 0 && first.y >= 0 &&
                             first.x < spec.width && first.y < spec.height) {
-                            view.commit(samples, "boox", range, layerId)
-                        } else view.render()
-                        try {
-                            helper?.let { active -> active.setRawDrawingEnabled(false); resumePreview(active) }
-                        }
-                        catch (error: Exception) { failure(error) }
-                        catch (error: LinkageError) { failure(error) }
+                            view.commit(samples, "boox", range, layerId, capturedBrush,
+                                deferPresentation = true)?.let { presenter.committed(it) }
+                        } else if (spec != null) presenter.committed(RectF(0f, 0f, spec.width.toFloat(), spec.height.toFloat()))
+                        awaitingStrokeCommit = false
+                        StrokePerformance.log("handoffQueued samples=${samples.size} mapMs=${StrokePerformance.ms(received, mapped)} queueMs=${StrokePerformance.ms(mapped, dequeued)} commitMs=${StrokePerformance.ms(dequeued)} totalMs=${StrokePerformance.ms(received)}")
                     }
                 }
             }

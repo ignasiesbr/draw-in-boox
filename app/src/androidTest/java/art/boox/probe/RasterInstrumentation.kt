@@ -11,10 +11,30 @@ import java.io.File
 
 /** Device-side bitmap and palm-filter checks using a separate temporary directory. */
 class RasterInstrumentation : Instrumentation() {
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
+    private var performanceOnly = false
+    private var asyncOnly = false
+    override fun onCreate(arguments: Bundle?) {
+        performanceOnly = arguments?.getString("performanceOnly") == "true"
+        asyncOnly = arguments?.getString("asyncOnly") == "true"
+        super.onCreate(arguments); start()
+    }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (asyncOnly) {
+                AsyncSurfaceChecks.run(this)
+                result.putString("stream", "PASS: background surface checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
+            if (performanceOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { LivePreviewWidthChecks.run(); StrokePerformanceChecks.run(); MarkerChecks.benchmark() } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: isolated stroke performance benchmark; see BooxPerf\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             var failure: Throwable? = null
             runOnMainSync {
               try {
@@ -65,6 +85,12 @@ class RasterInstrumentation : Instrumentation() {
                     AlphaLockChecks.run(targetContext)
                     TiltChecks.run(targetContext)
                     LivePreviewWidthChecks.run()
+                    BrushChecks.run(targetContext)
+                    MarkerChecks.run(targetContext)
+                    EraserChecks.run(targetContext)
+                    NativePreviewSafetyChecks.run(targetContext)
+                    DirtyFrameChecks.run(targetContext)
+                    StrokePresentationChecks.run(targetContext)
                 } finally { file.delete() }
               } catch (error: Throwable) { failure = error }
             }
@@ -72,6 +98,12 @@ class RasterInstrumentation : Instrumentation() {
             CanvasDialogChecks.run(this)
             LayerPanelChecks.run(this)
             SettingsChecks.run(this)
+            BrushChecks.dialogs(this)
+            MarkerChecks.dialogs(this)
+            EraserChecks.dialogs(this)
+            DirtyFrameChecks.surfaceBenchmark(this)
+            AsyncSurfaceChecks.run(this)
+            StrokeDiagnosticsChecks.run()
             result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport/rotation/mask, two-finger pan/cancellation/persistence, fixed document/export orientation, document checkpoint, canvas selector validation\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {

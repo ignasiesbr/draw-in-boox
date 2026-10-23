@@ -16,7 +16,7 @@ import android.widget.ImageButton
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS }
+enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE }
 
 /** Shared monochrome action/toggle. State is model-driven; clicking never silently toggles it.
  * No elevation, ripple or animated state; checked toggles have a 2dp black border. */
@@ -105,6 +105,36 @@ class UiIconDrawable(private val icon: UiIcon) : Drawable() {
             canvas.drawRect(left, top, right, bottom, paint)
         }
         when (icon) {
+            UiIcon.ERASER -> {
+                line(3f, 14f, 14f, 3f, 22f, 11f, 12f, 21f, 10f, 21f, 3f, 14f)
+                line(7f, 10f, 15f, 18f); line(10f, 21f, 22f, 21f)
+            }
+            UiIcon.MARKER -> {
+                line(4f, 17f, 15f, 3f, 22f, 9f, 11f, 22f, 4f, 17f)
+                line(6f, 14f, 14f, 20f); line(3f, 21f, 8f, 21f, 10f, 19f)
+            }
+            UiIcon.SHADE -> {
+                box(3f, 3f, 21f, 21f)
+                line(3f, 21f, 21f, 3f); line(8f, 20f, 20f, 8f); line(14f, 20f, 20f, 14f)
+            }
+            UiIcon.INK -> {
+                line(5f, 20f, 9f, 10f, 17f, 2f, 22f, 7f, 14f, 15f, 5f, 20f)
+                line(9f, 10f, 14f, 15f); canvas.drawCircle(11f, 13f, 1f, paint)
+            }
+            UiIcon.TILT -> {
+                line(3f, 18f, 16f, 3f, 21f, 8f, 7f, 21f, 3f, 18f)
+                line(5f, 15f, 10f, 18f); line(12f, 21f, 22f, 21f)
+            }
+            UiIcon.MONOLINE -> {
+                path.rewind(); path.moveTo(3f, 18f); path.cubicTo(8f, 2f, 16f, 22f, 21f, 6f)
+                canvas.drawPath(path, paint)
+                line(3f, 4f, 9f, 4f); line(15f, 20f, 21f, 20f)
+            }
+            UiIcon.SIZE -> {
+                canvas.drawCircle(12f, 12f, 8f, paint)
+                line(5f, 12f, 19f, 12f); line(8f, 9f, 5f, 12f, 8f, 15f)
+                line(16f, 9f, 19f, 12f, 16f, 15f)
+            }
             UiIcon.LAYERS -> {
                 line(3f, 7f, 12f, 2f, 21f, 7f, 12f, 12f, 3f, 7f)
                 line(3f, 12f, 12f, 17f, 21f, 12f); line(3f, 17f, 12f, 22f, 21f, 17f)

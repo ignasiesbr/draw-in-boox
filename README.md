@@ -1,8 +1,16 @@
 # BOOX Art
 
+Current native compatibility policy: gray and wide brushes use app-rendered live
+ink after a BOOX system pen-renderer crash. The fast native path remains for black
+brushes up to the accepted 30px footprint. See [the crash workaround](docs/NATIVE_PREVIEW_SAFETY.md).
+
+The drawing toolbar offers Ink, Tilt (default), Marker and Eraser. Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink/Tilt retain their 1–12px base range. Drawing-tool settings include eight opaque gray shades, shared across pens. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker and Eraser use app preview, which can feel slower than native black/narrow ink; the native crash guard remains. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
+
 Native Kotlin raster drawing prototype targeting the original BOOX Go 10.3, Android 12 (API 32).
 
 ## Resume here
+
+The user physically accepted `async-handoff-v1` as an **"incredible difference"** in responsiveness. Preserve this baseline when extending the app: immediate artwork/history commits, native live ink, bounded background surface painting from stable snapshots, and guarded reconciliation after a 450ms quiet gap. Read [the performance maintenance rules](AGENTS.md) and [the evidence and architecture](docs/PERFORMANCE.md) before changing this pipeline.
 
 For implementation work, read [the feature maintenance guide](docs/FEATURES.md): layers/history, shared icons, extensible settings, deferred zoom/rotation indicators, and BOOX pen-preview handoff traps.
 

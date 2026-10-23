@@ -1,5 +1,52 @@
 # Research and handoff
 
+Current build: `eraser-toolbar-v1`. Toolbar contains Ink/Tilt/Marker/Eraser; tapping
+the selected icon opens its settings. Separate size/settings/shade actions are
+removed. Eraser is fixed round, 1–128px, default 32px, clearing selected-layer alpha
+with tile undo/redo; hidden/locked/alpha-locked layers are protected. Its live preview
+isolates the selected layer and always uses the app renderer. Native compatibility
+and reader-enable fixes from shader-safe-v2 remain. Stroke diagnostics are schema 8
+with `operation=paint|erase`. See BRUSHES.md for implementation and controls.
+Build/lint and the full device suite pass, including before-lift screen visibility,
+lower-layer isolation at full/partial opacity, exact undo/redo, alpha-lock protection,
+export, preference preservation and first-tap/selected-tap/cancel UI behavior.
+
+User feedback: wide Marker still feels slower after the crash workaround. Documented
+as a current limitation at the user's request; further performance work is deferred.
+The inspected stroke was black, 100.8px, Android/app preview at 1x. Software snapshot,
+surface-lock and pen-up history timings are in PERFORMANCE.md; evidence is saved in
+`captures/20261023-151950`. Do not bypass the native crash guard to restore speed.
+
+Current startup follow-up: `shader-safe-v2` explicitly enables the SDK input reader
+after paused parameter configuration and before rendering is enabled. This fixes
+v1's `created=true input=false render=true` regression. Real SDK open/reopen tests
+and the full suite pass; logs confirm all flags true. Gray/wide brushes remain on
+app live preview under the crash workaround below.
+
+Latest revision is `shader-safe-v1`: a large light-gray Marker after zoom triggered
+a native SurfaceFlinger `updatePainterShader`/Scudo allocator-race abort (not a
+confirmed app OOM). Gray/wide brushes now use app-rendered live preview; native is
+limited to black/up-to-30px declared footprints. Native configuration is performed
+while paused, and fixed-width brushes have no contact-time setter. Android live
+snapshots include pending strokes and coalesce to one in flight; pen-up still
+commits immediately and displays asynchronously. Full tests pass, including visible
+gray ink before pen-up in PixelCopy. See NATIVE_PREVIEW_SAFETY.md. Keep the app
+stopped after installing this workaround until the user is ready to test.
+
+Latest brush increment: Marker (former Monoline, stable `monoline` ID) supports 1–128px; new defaults are 32px/constant width and old preferences survive. Eight opaque gray shades are shared across tools via a toolbar swatch and Brush settings, with Apply/Cancel. Native preview requests the same ARGB as the captured bitmap brush. Constant Marker uses a single stroked Path (`round-marker` v1), measured at 1.77ms vs 49.72ms for the prior renderer on 1,000 samples/128px. Preference schema 2 reads v1; stroke logs are schema 7 with captured gray/ARGB/engine metadata. Full device suite and build/lint pass. The accepted `async-handoff-v1` pipeline is preserved. Physical native-gray/large-width appearance is pending; see BRUSHES.md for the older manufacturer color limitation and validation recipe.
+
+**Accepted performance baseline (2026-10-23):** the user physically tested `async-handoff-v1` and reported an **"incredible difference"**, asking that the approach be preserved for future work. The combined background presentation, 450ms quiet gap, stable snapshots and cancellation policy is now accepted. Read AGENTS.md and PERFORMANCE.md before changing input/rendering boundaries. Earlier notes saying physical feedback is pending are superseded by this acceptance; exact end-to-end latency and broad device/brush coverage remain unmeasured.
+
+Current revision: `penPipeline=async-handoff-v1`. User confirmed the 150ms batch policy was much better for very fast writing, but normal-fast cadence could collide with its reset. Final reconciliation now waits 450ms and SurfaceHolder lock/draw/post runs on a worker using immutable snapshots. Pixel/history commits and native width control remain immediate on UI. Native reset still uses UI-only SDK View methods and retries after writing resumes during a worker frame. Epoch invalidation, bounded pending work and session-close flush protect lifecycle/order. Small snapshot UI median was 0.66ms; surface-lock waits moved off UI. Targeted and full device suites pass, including PixelCopy comparisons with documented edge rounding tolerance. See PERFORMANCE.md; real pen feedback is still required.
+
+Current installed experiment is identified by `penPipeline=quiet-handoff-v1` in Launch logs. Real handwriting showed per-stroke native pause/resume remained costly despite partial drawing. `StrokePresentation` now keeps pixel/history commit immediate and waits for a 150ms quiet gap before one combined display/native handoff; new contact cancels it. Session changes publish committed pending pixels. Full tests/build/lint pass; attached-SurfaceView six-stroke benchmark reduced median commit 25.81→3.96ms and total work 150.77→37.34ms (excludes native transitions/quiet wait/pen latency). Physical fast-writing feedback and final appearance still need verification. See PERFORMANCE.md before modifying lifecycle/timers.
+
+Latest lag follow-up: actual handwriting capture 20261023-122730 showed full-canvas presentation and native resume dominating (~50–60ms combined handoff), plus queued short strokes with zero width updates. Upright commits now repaint a conservative dirty rectangle; rotated canvases retain full frames for exact pixel preservation. Native handoff keeps the digitizer reader alive, toggles only rendering and restores black/base width/PENCIL. Begin width is inline on UI to avoid queued end callbacks cancelling it. Full device suite passes, including partial/full frame comparisons and a real SurfaceView benchmark (40.86ms full vs 15.41ms dirty medians, not pen latency). Retest real fast-writing/preview continuity; see PERFORMANCE.md.
+
+Fast-writing performance follow-up: stroke JSON/file work now runs on a bounded background worker; history reuses compression buffers across each transaction, and brush geometry reuses the previous radius. BooxPerf logs break down history, surface, UI queue, diagnostics, SDK resume and live width scheduling/setter time. Final on-device synthetic history/brush medians improved about 15–18%; build/lint, full instrumentation and isolated benchmark pass. Real fast handwriting and panel latency remain to be checked. See PERFORMANCE.md; `dev.ps1 capture` now includes BooxPerf.
+
+Latest increment: the initial brush toolbar is implemented (Ink, Tilt, Monoline, per-preset settings and captured brush commits). Build/lint and the full Go103 instrumentation suite, including BrushChecks, pass. Physical preview/pen-up comparison of the new presets is still pending. See BRUSHES.md for current ownership and restrictions; older research sections below are historical.
+
 Prepared 2026-10-22; updated 2026-10-23. This file distinguishes recommendations from verified device behavior. Windows setup and the initial Kotlin probe now run on the tablet; see `PROBE.md` for current commands and limitations.
 
 ## Current resume point
@@ -239,3 +286,6 @@ Pressure/input follow-up:
 - No tablet connection, firmware, screenshot, native SDK compatibility, or build result has been verified.
 - Original workspace initially contained only environment-managed hidden directories. Copy only README.md and docs; do not copy those hidden directories into Windows.
 - Attempt to create `/mnt/c/Users/YOUR_NAME/Projects/boox-art` failed because the Windows mount is read-only in this agent session. The user must perform the final copy from a Windows terminal.
+# Brush toolbar increment — 2026-10-23
+
+Implemented initial Ink/Tilt/Monoline toolbar with persistent per-preset size/pressure/tilt settings and Apply/Cancel dialogs. Existing Tilt remains the default; opaque round native-width preview is retained. Brush snapshots now travel through Android preview/commit and BOOX session/list commit; schema-6 logging reads the captured brush. Toolbar changes reject contact-to-handoff activity. Size remains bounded to 1–12 document pixels, at most 30 with tilt. Textured/soft/opacity brushes, erasing, public preset import/export and toolbar customization are deferred. See BRUSHES.md and BRUSH_ENGINE_PLAN.md. Automated checks and physical pen verification are separate: new presets still need before/after pen-up comparison on the tablet.

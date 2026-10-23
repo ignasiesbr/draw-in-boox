@@ -67,7 +67,7 @@ switch ($Command) {
         Invoke-Adb shell screencap -p /sdcard/boox-art-capture.png
         Invoke-Adb pull /sdcard/boox-art-capture.png "$destination\screen.png"
         Invoke-Adb shell rm /sdcard/boox-art-capture.png
-        Invoke-Adb logcat -d -s BooxProbe AndroidRuntime | Set-Content "$destination\logcat.txt"
+        Invoke-Adb logcat -d -s BooxProbe BooxPerf AndroidRuntime | Set-Content "$destination\logcat.txt"
         Invoke-Adb shell run-as art.boox.probe cat files/strokes.jsonl | Set-Content "$destination\strokes.jsonl"
         Invoke-Adb shell run-as art.boox.probe cat files/document-state.json | Set-Content "$destination\document-state.json"
         foreach ($property in @('ro.product.model', 'ro.build.version.sdk', 'ro.build.display.id')) {
