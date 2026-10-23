@@ -110,9 +110,11 @@ object AsyncSurfaceChecks {
                     check(native.open() && surface.rawInput) { "Native pen did not reopen after white eraser" }
                     native.close()
                     if (BuildConfig.BOOX_LAB) {
-                        surface.selectBrush(BrushPreset.LAB_FOUNTAIN.defaults())
-                        check(native.open() && surface.rawInput) { "Native fountain style did not open" }
-                        native.close()
+                        for (preset in BrushPreset.available.filter { it.booxFamily != null }) {
+                            surface.selectBrush(preset.defaults())
+                            check(native.open() && surface.rawInput) { "Native ${preset.label} style did not open" }
+                            native.close()
+                        }
                         surface.selectBrush(BrushPreset.INK.defaults())
                     }
                 } finally { native.close(); surface.inputEnabled = false }

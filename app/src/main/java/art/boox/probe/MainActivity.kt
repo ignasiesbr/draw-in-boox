@@ -409,7 +409,7 @@ class MainActivity : Activity() {
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
             .put("settingsVersion", 2).put("preview", if (source == "boox") {
-                if (captured.isEraser) "native-white-eraser" else if (captured.isBooxFountain) "native-fountain" else "native-round-width"
+                if (captured.isEraser) "native-white-eraser" else if (captured.usesBooxEngine) "native-${captured.booxFamily!!.label.lowercase()}" else "native-round-width"
             } else "app-round-brush")
             .put("operation", if (captured.isEraser) "erase" else "paint")
             .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))

@@ -16,7 +16,7 @@ import android.widget.ImageButton
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO }
+enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH }
 
 /** Shared monochrome action/toggle. State is model-driven; clicking never silently toggles it.
  * No elevation, ripple or animated state; checked toggles have a 2dp black border. */
@@ -105,6 +105,12 @@ class UiIconDrawable(private val icon: UiIcon) : Drawable() {
             canvas.drawRect(left, top, right, bottom, paint)
         }
         when (icon) {
+            UiIcon.BRUSH -> {
+                line(9f, 14f, 18f, 2f, 22f, 5f, 12f, 17f)
+                path.rewind(); path.moveTo(12f, 16f); path.cubicTo(10f, 10f, 4f, 14f, 5f, 18f)
+                path.quadTo(5f, 21f, 2f, 21f); path.quadTo(13f, 24f, 12f, 16f)
+                canvas.drawPath(path, paint)
+            }
             UiIcon.UNDO, UiIcon.REDO -> {
                 val arrow = canvas.save()
                 if (icon == UiIcon.REDO) canvas.scale(-1f, 1f, 12f, 12f)

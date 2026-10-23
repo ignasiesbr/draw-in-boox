@@ -2,18 +2,20 @@ package art.boox.probe
 
 import android.content.Context
 
-enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val maxSize: Float = 12f) {
+enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val maxSize: Float = 12f,
+    val booxFamily: BooxBrushFamily? = null) {
     INK("ink", "Ink", UiIcon.INK),
     TILT("tilt", "Tilt", UiIcon.TILT),
     // Keep the stored ID so existing Monoline size/dynamics preferences survive.
     MONOLINE("monoline", "Marker", UiIcon.MARKER, 128f),
     ERASER("eraser", "Eraser", UiIcon.ERASER, 128f),
-    LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE);
+    LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE, booxFamily = BooxBrushFamily.FOUNTAIN),
+    LAB_BRUSH("lab_brush", "Brush", UiIcon.BRUSH, booxFamily = BooxBrushFamily.BRUSH);
 
     fun defaults() = BrushSettings(id, size = if (this == MONOLINE || this == ERASER) 32f else 12f,
-        pressure = this == INK || this == TILT || this == LAB_FOUNTAIN, tilt = this == TILT)
+        pressure = this == INK || this == TILT || booxFamily != null, tilt = this == TILT)
     companion object {
-        val available get() = entries.filter { it != LAB_FOUNTAIN || BuildConfig.BOOX_LAB }
+        val available get() = entries.filter { it.booxFamily == null || BuildConfig.BOOX_LAB }
         fun fromId(id: String?) = entries.firstOrNull { it.id == id } ?: TILT
     }
 }

@@ -11,7 +11,8 @@ import com.onyx.android.sdk.pennative.PenInkResult
 
 /** Lab-only adapter to the pinned Java/JNI contract. All geometry lives in document
  * coordinates; native handles are short-lived and never reach the surface worker. */
-internal class BooxFountainGeometry(private val size: Float, private val color: Int) {
+internal class BooxBrushGeometry(private val size: Float, private val color: Int,
+    private val family: BooxBrushFamily) {
     private var cachedSamples: List<PenSample>? = null
     private var cachedCount = -1
     private var cachedLast: PenSample? = null
@@ -30,8 +31,8 @@ internal class BooxFountainGeometry(private val size: Float, private val color: 
         if (samples === cachedSamples && samples.size == cachedCount && samples.lastOrNull() == cachedLast) return
         if (samples.isEmpty()) { points = emptyList(); bounds = null; return }
         val config = PenConfig().apply {
-            type = PenConfig.NEOPEN_PEN_TYPE_FOUNTAIN
-            width = size; minWidth = minOf(0.5f, size); this.color = this@BooxFountainGeometry.color
+            type = family.rendererType
+            width = size; minWidth = minOf(0.5f, size); this.color = this@BooxBrushGeometry.color
             maxTouchPressure = 1f // PenSample is already normalized in both capture paths.
             pressureSensitivity = 1f; velocitySensitivity = 0f; smoothLevel = 0.5f
             tiltEnabled = false; directionEnabled = false
@@ -39,7 +40,7 @@ internal class BooxFountainGeometry(private val size: Float, private val color: 
         }
         val native = NeoPenNative
         val handle = native.createPen(config.type, config)
-        check(handle != 0L) { "BOOX fountain renderer could not create a pen" }
+        check(handle != 0L) { "BOOX brush renderer could not create a pen" }
         val rendered = ArrayList<TouchPoint>()
         var renderedBounds: RectF? = null
         val originTime = samples.first().time
@@ -47,13 +48,13 @@ internal class BooxFountainGeometry(private val size: Float, private val color: 
             sample.pressure.toDouble(), 0.0, 0.0, 0.0, (sample.time - originTime).coerceAtLeast(0).toDouble())
         fun append(result: PenInkResult?) {
             val ink = result?.realInk ?: return
-            check(ink.bitmaps.isEmpty() && ink.pointSizeArray.all { it == 3 }) { "Unexpected fountain geometry encoding" }
+            check(ink.bitmaps.isEmpty() && ink.pointSizeArray.all { it == 3 }) { "Unexpected brush geometry encoding" }
             val values = ink.points
-            check(values.size % 3 == 0 && rendered.size + values.size / 3 <= 100_000) { "Fountain geometry exceeds stroke budget" }
+            check(values.size % 3 == 0 && rendered.size + values.size / 3 <= 100_000) { "Brush geometry exceeds stroke budget" }
             for (i in values.indices step 3) {
                 val x = values[i]; val y = values[i + 1]; val width = values[i + 2]
-                check(x.isFinite() && y.isFinite() && width.isFinite() && width >= 0f && width <= size * 2f) {
-                    "Invalid fountain geometry"
+                check(x.isFinite() && y.isFinite() && width.isFinite() && width >= 0f && width <= family.maximumWidth(size)) {
+                    "Invalid brush geometry"
                 }
                 if (width == 0f) continue
                 val previous = rendered.lastOrNull()

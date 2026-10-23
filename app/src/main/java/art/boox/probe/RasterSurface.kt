@@ -221,7 +221,7 @@ class RasterSurface(
         historyTaps.cancel()
         try { history.execute(current, StrokeEdit(valid, capturedBrush)) }
         catch (failure: Throwable) {
-            if (!capturedBrush.isBooxFountain || (failure !is Exception && failure !is LinkageError)) throw failure
+            if (!capturedBrush.usesBooxEngine || (failure !is Exception && failure !is LinkageError)) throw failure
             Log.e("BooxProbe", "Experimental fountain stroke failed; artwork retained", failure)
             error?.invoke("Fountain stroke failed: ${failure.message}. Existing artwork retained.")
             // History restores captured pixels on edit failure. Reconcile any
@@ -435,7 +435,7 @@ class RasterSurface(
         if (pending.isNotEmpty()) {
             val pendingBounds = try { strokeBrush.renderedBounds(pending) }
             catch (failure: Throwable) {
-                if (!strokeBrush.isBooxFountain || (failure !is Exception && failure !is LinkageError)) throw failure
+                if (!strokeBrush.usesBooxEngine || (failure !is Exception && failure !is LinkageError)) throw failure
                 Log.e("BooxProbe", "Experimental fountain preview failed", failure)
                 cancelStroke()
                 error?.invoke("Fountain preview failed: ${failure.message}")

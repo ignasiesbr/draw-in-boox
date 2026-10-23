@@ -1,5 +1,11 @@
 # Research and handoff
 
+Brush-engine expansion: `lab_brush` now joins Fountain in Lab. See BRUSH_ENGINE.md.
+Source host tests (24), recovered build/lint and the full Go103 suite pass. Brush
+180-sample check: geometry 19.03ms, raster 2.58ms (cold stage timings, not pen
+latency). Native NEO_BRUSH opens/reopens in SDK checks; physical feel/shape remains
+to be compared. Existing native input and asynchronous handoff are unchanged.
+
 Physical feedback on `f4bde6c`: user tested the recovered Fountain Lab and said
 "its good". Treat this as positive feedback for that trial/configuration, not proof
 of exact firmware/raster equivalence or acceptance of every source brush family.

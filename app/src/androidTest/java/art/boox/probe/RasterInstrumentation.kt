@@ -101,6 +101,7 @@ class RasterInstrumentation : Instrumentation() {
                     NativePreviewSafetyChecks.run(targetContext)
                     NativeEraserChecks.run()
                     BooxFountainChecks.run(targetContext)
+                    BooxBrushChecks.run(targetContext)
                     DirtyFrameChecks.run(targetContext)
                     StrokePresentationChecks.run(targetContext)
                 } finally { file.delete() }

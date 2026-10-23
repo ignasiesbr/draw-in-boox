@@ -844,6 +844,20 @@ impl PenState {
             .collect::<Vec<_>>();
         let mut real = InkData::default();
         let mut predicted = InkData::default();
+        // Modern app Brush: consume every pressure sample without cloning stroke
+        // history or delaying coordinates until the following input batch.
+        // Legacy reference behavior remains below for existing consumers.
+        if self.pen_type == 1 && self.config.renderer_version == 2 {
+            if phase == Phase::Down { self.reset(); }
+            for point in transformed {
+                Self::push_point(&mut real, point, self.brush_width(point));
+                self.last = Some(point);
+            }
+            if let Some(point) = prediction.map(|p| self.transform(p)) {
+                Self::push_point(&mut predicted, point, self.brush_width(point));
+            }
+            return (real, predicted);
+        }
         if self.pen_type == 2 && self.config.renderer_version == 2 {
             let prediction = prediction
                 .map(|point| self.transform(point))
@@ -1049,6 +1063,25 @@ impl PenState {
             }
         }
         (real, predicted)
+    }
+}
+
+#[cfg(test)]
+mod app_brush_tests {
+    use super::*;
+    #[test]
+    fn modern_brush_consumes_all_pressure_samples_without_retaining_history() {
+        let mut pen = PenState::new(1, PenConfig { renderer_version: 2, width: 12.0, ..PenConfig::default() });
+        pen.process(&[Touch { pressure: 0.1, ..Touch::default() }], None, Phase::Down);
+        let (ink, _) = pen.process(&[
+            Touch { x: 10.0, pressure: 0.2, ..Touch::default() },
+            Touch { x: 20.0, pressure: 1.0, ..Touch::default() },
+        ], None, Phase::Move);
+        assert_eq!(ink.point_sizes, vec![3, 3]);
+        assert_eq!(ink.points[0], 10.0);
+        assert_eq!(ink.points[3], 20.0);
+        assert!(ink.points[5] > ink.points[2]);
+        assert!(pen.history.is_empty());
     }
 }
 
