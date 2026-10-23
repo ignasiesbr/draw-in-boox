@@ -12,16 +12,21 @@ import com.onyx.android.sdk.pennative.PenInkResult
 /** Lab-only adapter to the pinned Java/JNI contract. All geometry lives in document
  * coordinates; native handles are short-lived and never reach the surface worker. */
 internal class BooxBrushGeometry(private val size: Float, private val color: Int,
-    private val family: BooxBrushFamily) {
+    private val family: BooxBrushFamily, pressure: Boolean, tilt: Boolean) {
+    private val dryGeometry = if (family.dry) DryBrushGeometry(size, color, family, pressure, tilt) else null
     private var cachedSamples: List<PenSample>? = null
     private var cachedCount = -1
     private var cachedLast: PenSample? = null
     private var points = emptyList<TouchPoint>()
     private var bounds: RectF? = null
 
-    fun bounds(samples: List<PenSample>): RectF? { prepare(samples); return bounds?.let(::RectF) }
+    fun bounds(samples: List<PenSample>): RectF? {
+        dryGeometry?.let { return it.bounds(samples) }
+        prepare(samples); return bounds?.let(::RectF)
+    }
 
     fun draw(canvas: Canvas, paint: Paint, samples: List<PenSample>) {
+        dryGeometry?.let { it.draw(canvas, paint, samples); return }
         prepare(samples)
         if (points.size == 1) canvas.drawCircle(points[0].x, points[0].y, points[0].size / 2f, paint)
         else PenUtils.drawStrokeByPointSize(canvas, paint, points, false)

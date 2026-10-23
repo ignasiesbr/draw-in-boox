@@ -10,12 +10,14 @@ enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val 
     MONOLINE("monoline", "Marker", UiIcon.MARKER, 128f),
     ERASER("eraser", "Eraser", UiIcon.ERASER, 128f),
     LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE, booxFamily = BooxBrushFamily.FOUNTAIN),
-    LAB_BRUSH("lab_brush", "Brush", UiIcon.BRUSH, booxFamily = BooxBrushFamily.BRUSH);
+    LAB_BRUSH("lab_brush", "Brush", UiIcon.BRUSH, booxFamily = BooxBrushFamily.BRUSH),
+    LAB_PENCIL("lab_pencil", "Pencil", UiIcon.PENCIL, 64f, BooxBrushFamily.PENCIL);
 
-    fun defaults() = BrushSettings(id, size = if (this == MONOLINE || this == ERASER) 32f else 12f,
-        pressure = this == INK || this == TILT || booxFamily != null, tilt = this == TILT)
+    fun defaults() = BrushSettings(id, size = when (this) { MONOLINE, ERASER -> 32f; LAB_PENCIL -> 8f; else -> 12f },
+        pressure = this == INK || this == TILT || booxFamily != null, tilt = this == TILT || booxFamily?.dry == true)
     companion object {
-        val available get() = entries.filter { it.booxFamily == null || BuildConfig.BOOX_LAB }
+        val available get() = entries.filter { it.booxFamily == null || (BuildConfig.BOOX_LAB &&
+            (it.booxFamily.dry.not() || BuildConfig.RENDERER_BACKEND == "recovered")) }
         fun fromId(id: String?) = entries.firstOrNull { it.id == id } ?: TILT
     }
 }
@@ -36,6 +38,7 @@ data class BrushSettings(val presetId: String = "tilt", val size: Float = 12f,
 class BrushSettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
     fun selected() = BrushPreset.fromId(preferences.getString("brush_selected", null))
+        .takeIf { it in BrushPreset.available } ?: BrushPreset.TILT
     fun load(preset: BrushPreset): BrushSettings {
         val defaults = preset.defaults()
         if (preferences.getInt("brush_schema", 1) !in 1..2) return defaults

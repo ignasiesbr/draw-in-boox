@@ -6,6 +6,16 @@ import kotlin.math.cos
 
 /** Canonical inclination is radians: 0 upright, PI/2 flat. Missing is not upright. */
 object PenTilt {
+    /** Azimuth of the projected pen axis in screen coordinates. */
+    fun azimuth(sample: PenSample): Float? {
+        sample.documentAzimuthRadians?.takeIf { it.isFinite() }?.let { return it }
+        sample.viewOrientationRadians?.takeIf { it.isFinite() }?.let { return it - (Math.PI / 2).toFloat() }
+        val x = sample.rawTiltX ?: return null
+        val y = sample.rawTiltY ?: return null
+        if (x !in -90..90 || y !in -90..90 || (x == 0 && y == 0)) return null
+        return kotlin.math.atan2(kotlin.math.tan(Math.toRadians(y.coerceIn(-89, 89).toDouble())),
+            kotlin.math.tan(Math.toRadians(x.coerceIn(-89, 89).toDouble()))).toFloat()
+    }
     fun android(tilt: Float, supported: Boolean): Float? =
         if (supported && tilt.isFinite() && tilt >= 0f) tilt.coerceAtMost((Math.PI / 2).toFloat()) else null
 

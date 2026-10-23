@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+mod dry_brush;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -234,6 +236,8 @@ struct PenState {
     history: Vec<Touch>,
     brush_sign_traveled: f32,
     brush_sign_segments_seen: usize,
+    dry_remaining: f64,
+    dry_dabs: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -255,6 +259,8 @@ impl PenState {
             history: Vec::new(),
             brush_sign_traveled: 0.0,
             brush_sign_segments_seen: 0,
+            dry_remaining: 0.0,
+            dry_dabs: 0,
         }
     }
 
@@ -264,6 +270,8 @@ impl PenState {
         self.history.clear();
         self.brush_sign_traveled = 0.0;
         self.brush_sign_segments_seen = 0;
+        self.dry_remaining = 0.0;
+        self.dry_dabs = 0;
     }
 
     fn transform(&self, mut point: Touch) -> Touch {
@@ -844,6 +852,10 @@ impl PenState {
             .collect::<Vec<_>>();
         let mut real = InkData::default();
         let mut predicted = InkData::default();
+        if self.pen_type == 11 {
+            let prediction = prediction.map(|p| self.transform(p));
+            return self.process_dry(&transformed, prediction, phase);
+        }
         // Modern app Brush: consume every pressure sample without cloning stroke
         // history or delaying coordinates until the following input batch.
         // Legacy reference behavior remains below for existing consumers.
@@ -1755,7 +1767,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCr
     config: JObject<'local>,
 ) -> jlong {
     modern_jni_boundary(&mut unowned_env, |unowned_env| {
-        if !(1..=10).contains(&pen_type) || config.is_null() {
+        if !(1..=11).contains(&pen_type) || config.is_null() {
             unowned_env
                 .with_env(|env| -> jni::errors::Result<()> {
                     throw_api_failure(

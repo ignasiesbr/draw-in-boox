@@ -10,15 +10,21 @@ object BooxBrushChecks {
     fun run(context: Context) {
         if (!BuildConfig.BOOX_LAB) return
         checkFamily(context, BrushPreset.LAB_BRUSH)
+        if (BuildConfig.RENDERER_BACKEND == "recovered") {
+            checkFamily(context, BrushPreset.LAB_PENCIL)
+            checkTilt(BrushPreset.LAB_PENCIL)
+        }
     }
 
     fun checkFamily(context: Context, preset: BrushPreset) {
         val settings = preset.defaults()
         val brush = settings.compile()
-        check(brush.usesBooxEngine && !brush.hasDynamicWidth)
+        check(brush.usesBooxEngine && brush.hasDynamicWidth == (preset.booxFamily?.appPreviewWidth == true))
         check(NativePreviewPolicy.supports(brush))
-        check(LivePreviewWidth.forBrush(brush, 1f, post = { _, _ -> error("Double dynamics") },
-            remove = {}, apply = { error("Double dynamics") }) == null)
+        if (preset.booxFamily?.appPreviewWidth != true) {
+            check(LivePreviewWidth.forBrush(brush, 1f, post = { _, _ -> error("Double dynamics") },
+                remove = {}, apply = { error("Double dynamics") }) == null)
+        }
         val samples = List(180) { i -> PenSample(35f + i * 1.4f,
             80f + kotlin.math.sin(i * 0.08f) * 24f, 0.15f + 0.85f * i / 179f, i * 4L) }
         val document = DrawingDocument.create(CanvasSpec(340, 180))
@@ -67,5 +73,34 @@ object BooxBrushChecks {
             }
             android.util.Log.i("BooxPerf", "brushEngine preset=${preset.id} samples=${samples.size} painted=$painted geometryMs=${StrokePerformance.ms(started, prepared)} drawMs=${StrokePerformance.ms(prepared, drawn)}")
         } finally { document.recycle(); rendered.recycle(); replay.recycle() }
+    }
+
+    private fun checkTilt(preset: BrushPreset) {
+        val settings = preset.defaults().copy(size = 10f)
+        val brush = settings.compile()
+        val up = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+        val flat = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
+        fun pixels(bitmap: Bitmap): Int = (0 until 128).sumOf { y ->
+            (0 until 128).count { x -> Color.alpha(bitmap.getPixel(x, y)) > 0 } }
+        val dot = PenSample(64f, 64f, 1f, 0)
+        val tilted = dot.copy(tiltRadians = Math.toRadians(65.0).toFloat(), documentAzimuthRadians = 0.7f)
+        try {
+            brush.draw(Canvas(up), listOf(dot))
+            brush.draw(Canvas(flat), listOf(tilted))
+            check(pixels(flat) > pixels(up) * 1.8f) { "${preset.label} tilt did not broaden shading" }
+            check(brush.width(tilted) == 25f && brush.maxRenderedWidth == 25f)
+            flat.eraseColor(Color.TRANSPARENT)
+            settings.copy(tilt = false).compile().draw(Canvas(flat), listOf(tilted.copy(documentAzimuthRadians = 0f)))
+            check(up.sameAs(flat)) { "Disabling tilt did not restore upright tip" }
+            flat.eraseColor(Color.TRANSPARENT)
+            brush.draw(Canvas(flat), listOf(dot.copy(tiltRadians = Float.NaN)))
+            check(up.sameAs(flat)) { "Missing/invalid tilt changed shading" }
+            check(!NativePreviewPolicy.supports(settings.copy(size = 13f).compile()))
+            check(NativePreviewPolicy.supports(settings.copy(size = 13f, tilt = false).compile()))
+            val sample = dot.copy(rawTiltX = 45, rawTiltY = 0)
+            val mapped = ViewTransform(1f, 0f, 0f, 90f).map(sample)
+            check(kotlin.math.abs(mapped.documentAzimuthRadians!! + (Math.PI / 2).toFloat()) < 0.001f)
+            check(PenTilt.boox(45, 0)!! > 0f)
+        } finally { up.recycle(); flat.recycle() }
     }
 }

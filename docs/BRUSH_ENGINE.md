@@ -25,9 +25,38 @@ available native family and return to Ink. These checks do not measure stylus-to
 latency or prove firmware/raster fidelity; ordinary-fast and burst writing still
 need physical comparison.
 
-## Planned shading brushes
+## Pencil
 
-Pencil and Charcoal need pressure and tilt: canonical inclination is 0 radians
+`lab_pencil` is source-only type 11, 1–64px, default 8px. Pressure changes contact
+width and opacity; tilt broadens the contact up to 2.5x by 65 degrees. Both controls
+are enabled by default and can be disabled independently. Missing/invalid tilt
+behaves upright. Raw Wacom axes and Android inclination/azimuth are normalized;
+azimuth follows document rotation. The tip becomes elliptical for side shading.
+
+Rust emits distance-spaced seven-float records (x,y,major,minor,angle in degrees,
+opacity,tip variant). Spacing carries across batches, prediction uses a cloned
+state, and 100,000 dabs bounds each stroke. Original types 1–10 retain their
+encodings. App JNI calls batch up to 128 samples. Four deterministic shared 64px
+texture masks cover all colors and sizes; no bitmap is allocated per dab. Native
+handles are released in `finally` and cached primitive geometry serves bounds,
+history and rasterization. Pressure/tilt need no extra per-point logging.
+
+Black/narrow Pencil uses firmware PENCIL with the same app pressure/tilt major
+width, retaining the accepted 2ms updater. Firmware PENCIL does not reproduce our
+grain, transparency or elliptical contact. It is an explicitly approximate fast
+preview, corrected after the quiet gap. Gray or >30px maximum footprint uses the
+actual app brush for live ink. Turning tilt off can make a size native-compatible.
+
+Validation: 27 source tests and full Go103 device suite pass, including tilted
+footprints, missing/invalid tilt, disabled controls, document azimuth rotation,
+gray/alpha lock, complete undo and deterministic redo. The 180-sample cold check
+measured geometry 9.58ms and draw 32.14ms including first-use mask initialization;
+these are CPU stages, not panel latency. Physical writing/preview matching remains
+unverified. An initial suite run failed when the device slept; the awake rerun passed.
+
+## Planned Charcoal
+
+Charcoal also needs pressure and tilt: canonical inclination is 0 radians
 upright, PI/2 flat; missing tilt behaves upright. Tilt should broaden the contact
 for side shading, with deterministic distance-spaced texture and bounded memory.
 Do not simply expose the recovered fixed-count Pencil or fixed-size Charcoal

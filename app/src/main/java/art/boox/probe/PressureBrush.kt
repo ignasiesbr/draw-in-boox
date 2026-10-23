@@ -12,7 +12,8 @@ data class PenSample(
     val x: Float, val y: Float, val pressure: Float, val time: Long,
     val rawPressure: Float = pressure,
     val tiltRadians: Float? = null, val viewOrientationRadians: Float? = null,
-    val rawTiltX: Int? = null, val rawTiltY: Int? = null
+    val rawTiltX: Int? = null, val rawTiltY: Int? = null,
+    val documentAzimuthRadians: Float? = null
 )
 
 data class PressureRange(val min: Float, val max: Float, val origin: String) {
@@ -49,7 +50,8 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     private val alphaLockMode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
     private val eraseMode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     private val path = Path()
-    private val booxGeometry by lazy { BooxBrushGeometry(maxWidth, inkColor, checkNotNull(booxFamily)) }
+    private val booxGeometry by lazy { BooxBrushGeometry(maxWidth, inkColor, checkNotNull(booxFamily),
+        settings?.pressure ?: true, settings?.tilt ?: false) }
 
     fun renderedBounds(samples: List<PenSample>) = if (usesBooxEngine) booxGeometry.bounds(samples)
         else StrokeDirtyBounds.document(samples, maxRenderedWidth)
@@ -57,9 +59,13 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     fun width(pressure: Float): Float = minWidth + (maxWidth - minWidth) *
         (if (pressure.isFinite()) pressure.coerceIn(0f, 1f) else 0f)
 
-    val maxRenderedWidth: Float get() = booxFamily?.maximumWidth(maxWidth) ?: (maxWidth * widthModifier.maxMultiplier)
-    val hasDynamicWidth: Boolean get() = !usesBooxEngine && (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
-    fun width(sample: PenSample): Float = width(sample.pressure) *
+    val maxRenderedWidth: Float get() = if (booxFamily?.dry == true) maxWidth * widthModifier.maxMultiplier
+        else booxFamily?.maximumWidth(maxWidth) ?: (maxWidth * widthModifier.maxMultiplier)
+    val hasDynamicWidth: Boolean get() = (!usesBooxEngine || booxFamily?.appPreviewWidth == true) &&
+        (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
+    fun width(sample: PenSample): Float = (if (booxFamily?.dry == true)
+        maxWidth * (0.22f + 0.78f * kotlin.math.sqrt(if (settings?.pressure == false) 1f else
+            sample.pressure.let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f })) else width(sample.pressure)) *
         widthModifier.multiplier(sample).let { if (it.isFinite()) it.coerceIn(1f, widthModifier.maxMultiplier) else 1f }
 
     fun draw(canvas: Canvas, samples: List<PenSample>, alphaLocked: Boolean = false) {

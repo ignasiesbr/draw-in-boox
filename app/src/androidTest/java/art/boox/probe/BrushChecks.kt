@@ -102,6 +102,17 @@ object BrushChecks {
                 check(applied == null)
                 val ink = activity.findViewById<View>(android.R.id.content).findViewWithTag<EinkIconButton>("brush.ink")
                 check(ink != null && ink.minimumWidth >= (48 * activity.resources.displayMetrics.density).toInt())
+                for (preset in BrushPreset.available.filter { it.booxFamily?.dry == true }) {
+                    val settings = preset.defaults()
+                    applied = null
+                    dialog = BrushSettingsDialog.show(activity, settings) { applied = it; true }
+                    val dryControls = dialog.findViewById<View>(android.R.id.content)
+                    check(dryControls.findViewWithTag<CheckBox>("Brush tilt").isChecked)
+                    dryControls.findViewWithTag<CheckBox>("Brush tilt").isChecked = false
+                    dryControls.findViewWithTag<CheckBox>("Brush pressure").isChecked = false
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                    check(applied == settings.copy(tilt = false, pressure = false))
+                }
             } catch (error: Throwable) { failure = error }
             finally { dialog?.dismiss(); activity.finish() }
         }

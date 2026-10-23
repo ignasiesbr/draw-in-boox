@@ -21,7 +21,9 @@ data class ViewTransform(val scale: Float, val x: Float, val y: Float, val rotat
     }
     fun toView(x: Float, y: Float) = PointF(scale * (x * cosine - y * sine) + this.x,
         scale * (x * sine + y * cosine) + this.y)
-    fun map(sample: PenSample): PenSample = toDocument(sample.x, sample.y).let { sample.copy(x = it.x, y = it.y) }
+    fun map(sample: PenSample): PenSample = toDocument(sample.x, sample.y).let {
+        sample.copy(x = it.x, y = it.y, documentAzimuthRadians = PenTilt.azimuth(sample)?.minus(radians.toFloat()))
+    }
     fun matrix() = Matrix().apply {
         setValues(floatArrayOf(scale * cosine, -scale * sine, x, scale * sine, scale * cosine, y, 0f, 0f, 1f))
     }

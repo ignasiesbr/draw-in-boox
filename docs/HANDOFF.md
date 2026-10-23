@@ -1,5 +1,11 @@
 # Research and handoff
 
+Pencil expansion: source-only `lab_pencil` uses distance-spaced Rust type 11 and
+four shared grain masks, with pressure/tilt controls enabled by default. Black/
+narrow native PENCIL matches major width, but grain/opacity/ellipse are approximate
+until commit. Gray and wide remain app-rendered. 27 Rust tests and the full awake
+Go103 suite pass. See BRUSH_ENGINE.md for contract, timings and pending pen trials.
+
 Brush-engine expansion: `lab_brush` now joins Fountain in Lab. See BRUSH_ENGINE.md.
 Source host tests (24), recovered build/lint and the full Go103 suite pass. Brush
 180-sample check: geometry 19.03ms, raster 2.58ms (cold stage timings, not pen
