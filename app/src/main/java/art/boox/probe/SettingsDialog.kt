@@ -8,6 +8,7 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.CheckBox
 
 /** Settings editor is independent of activity/layout and commits only after Apply. */
 object SettingsDialog {
@@ -33,13 +34,25 @@ object SettingsDialog {
         }
         sides.check(checkNotNull(choices[settings.layerPanelSide]).id)
         content.addView(sides)
+        content.addView(TextView(context).apply {
+            text = "History gestures"; textSize = 18f; setTextColor(Color.BLACK)
+            setPadding(0, dp(16), 0, 0)
+        })
+        fun gestureChoice(label: String, tagName: String, enabled: Boolean) = CheckBox(context).apply {
+            text = label; tag = tagName; isChecked = enabled
+            textSize = 18f; minHeight = dp(56); setTextColor(Color.BLACK)
+            content.addView(this)
+        }
+        val undoGesture = gestureChoice("Undo: two-finger tap", "Undo gesture", settings.undoGestureEnabled)
+        val redoGesture = gestureChoice("Redo: two-finger double tap", "Redo gesture", settings.redoGestureEnabled)
         val dialog = AlertDialog.Builder(context).setTitle("Settings")
             .setView(ScrollView(context).apply { addView(content) })
             .setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val side = choices.entries.first { it.value.id == sides.checkedRadioButtonId }.key
-            if (apply(settings.copy(layerPanelSide = side))) dialog.dismiss()
+            if (apply(settings.copy(layerPanelSide = side, undoGestureEnabled = undoGesture.isChecked,
+                    redoGestureEnabled = redoGesture.isChecked))) dialog.dismiss()
         }
         return dialog
     }

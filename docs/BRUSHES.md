@@ -1,5 +1,23 @@
 # Brush input, tilt and live preview
 
+Alpha-lock product decision (2026-10-23): the user accepts native feedback outside
+the alpha mask during contact, corrected by the committed composite. Compatible
+black brushes already remain native with alpha lock on; do not add a native gate
+for this paint case. Pixels/history use SRC_ATOP and preserve the exact existing
+alpha channel. Screen correction retains the accepted 450ms quiet-gap policy.
+Gray/wide safety fallbacks and the eraser's alpha-lock restriction are separate.
+The user explicitly chose to retain gray live preview when offered a black native
+proxy for gray commits. Gray therefore stays app-rendered; do not silently change
+its preview color to black to gain native speed.
+
+Current experiment `native-eraser-v1` follows baseline commit `388add9`: a round
+eraser <=30px in both document and screen coordinates uses white native feedback
+on exactly one layer at 100% opacity, visible/unlocked and alpha lock off. Pixels
+still clear to transparency on commit. Other eraser cases retain app preview.
+Status identifies the experimental BOOX eraser; toggle Android pen to compare.
+User physical validation is pending. This supersedes the always-app eraser wording
+below, without relaxing the gray/wide paint guard. See NATIVE_PREVIEW_SAFETY.md.
+
 **Native preview workaround (shader-safe-v2, retained in eraser-toolbar-v1):** the gray/wide native shader path
 crashed SurfaceFlinger on this device. Marker sizes/shades remain available through
 app-rendered live ink; only black brushes with a declared footprint up to 30px use

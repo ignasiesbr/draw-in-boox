@@ -116,13 +116,25 @@ class RasterSurface(
             render(); ready?.invoke()
         })
     var error: ((String) -> Unit)? = null
+    var undoGestureEnabled = true
+        private set
+    var redoGestureEnabled = true
+        private set
     private val historyTaps = HistoryTapGestures(ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
         ViewConfiguration.getDoubleTapTimeout().toLong(),
         eligible = { inputEnabled && document != null && !isDrawing && !isNavigating },
         post = { task, delay -> postDelayed(task, delay) }, remove = { removeCallbacks(it) },
         undo = { if (!undo()) historyFeedback?.invoke("Nothing to undo") },
         redo = { if (!redo()) historyFeedback?.invoke("Nothing to redo") },
-        trace = { Log.d("BooxProbe", it) })
+        trace = { Log.d("BooxProbe", it) },
+        undoEnabled = { undoGestureEnabled }, redoEnabled = { redoGestureEnabled })
+
+    fun configureHistoryGestures(undoEnabled: Boolean, redoEnabled: Boolean) {
+        // A tap queued before Apply must not change history afterward.
+        historyTaps.cancel()
+        undoGestureEnabled = undoEnabled
+        redoGestureEnabled = redoEnabled
+    }
 
     init { tag = "Drawing surface"; holder.addCallback(this) }
 

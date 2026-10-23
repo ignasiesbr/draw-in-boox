@@ -98,6 +98,17 @@ object AsyncSurfaceChecks {
                         native.close()
                         check(!surface.rawInput)
                     }
+                    surface.zoom(ZoomAction.ACTUAL)
+                    surface.document!!.activeLayer.alphaLocked = true
+                    check(native.open() && surface.rawInput) { "Alpha lock disabled compatible native pen input" }
+                    native.close()
+                    surface.document!!.activeLayer.alphaLocked = false
+                    surface.selectBrush(BrushPreset.ERASER.defaults().copy(size = 24f))
+                    check(native.open() && surface.rawInput) { "Native white eraser reader did not open" }
+                    native.close()
+                    surface.selectBrush(BrushPreset.INK.defaults())
+                    check(native.open() && surface.rawInput) { "Native pen did not reopen after white eraser" }
+                    native.close()
                 } finally { native.close(); surface.inputEnabled = false }
             }
             for (angle in listOf(0f, 37f)) {

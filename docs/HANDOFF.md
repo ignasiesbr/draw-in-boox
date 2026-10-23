@@ -1,5 +1,34 @@
 # Research and handoff
 
+Alpha-lock follow-up: user accepts native ink outside the alpha mask during input,
+corrected by the committed composite. Compatible black paint already uses native
+feedback under alpha lock; keep that behavior and the accepted 450ms reconciliation.
+Status now identifies alpha-lock commit behavior. AlphaLockChecks verifies native-
+source commits preserve all alpha values and undo/redo; AsyncSurfaceChecks opens
+the real SDK while alpha lock is enabled. Gray/wide crash guards remain independent.
+User chose to keep gray preview rather than black native feedback that changes to
+gray on commit. Retain gray app rendering; do not introduce a black proxy for gray.
+Build/lint and full device tests pass for the alpha-lock follow-up.
+
+Current UI revision: `history-controls-v1` (pen pipeline remains native-eraser-v1).
+Undo/Redo now appear as arrow icons on the brush toolbar. Settings independently
+toggles undo two-finger tap and redo two-finger double tap, with existing gestures
+enabled by default and persisted outside artwork. Applying cancels pending history
+taps. Manual actions remain enabled by history state; pan/pinch/rotation remain
+available. See FEATURES.md, HistoryTapChecks and SettingsChecks.
+Build/lint and the full device suite pass for these controls and gesture toggles.
+
+Current experiment: `native-eraser-v1`. User requested committing the current way
+first; baseline commit is `388add9`. A white PENCIL preview is now being trialed
+for <=30px erasers (document and screen) on exactly one full-opacity unlocked layer
+with alpha lock off. Artwork/history still use CLEAR. Other cases retain app preview;
+gray/wide paint restrictions remain. The input-mode button compares BOOX/Android.
+Physical pen feedback is pending. See NATIVE_PREVIEW_SAFETY.md and NativeEraserChecks.
+Build/lint and the full device suite pass. Real SDK opens white at 24px/1x and
+returns to black successfully with reader/render flags true. The first fixture
+attempt correctly fell back at 1.92x (46px screen width); the test now explicitly
+uses 100% to exercise the native branch. This does not validate physical white ink.
+
 Current build: `eraser-toolbar-v1`. Toolbar contains Ink/Tilt/Marker/Eraser; tapping
 the selected icon opens its settings. Separate size/settings/shade actions are
 removed. Eraser is fixed round, 1–128px, default 32px, clearing selected-layer alpha

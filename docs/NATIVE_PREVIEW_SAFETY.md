@@ -1,7 +1,31 @@
 # Native pen renderer crash workaround
 
-2026-10-23, safety revision `shader-safe-v2`, retained in `penPipeline=eraser-toolbar-v1`.
-Erasers always use app preview, independently of size or stored ink shade.
+2026-10-23, safety revision `shader-safe-v2`, retained in `penPipeline=native-eraser-v1`.
+
+## User-authorized native white eraser experiment
+
+The current app-rendered eraser and all preceding brush/performance work were
+committed as `388add9` before trying native feedback, at the user's request.
+`native-eraser-v1` adds a restricted white PENCIL preview: eraser width must be
+<=30 document pixels and <=30 screen pixels at the current zoom; exactly one
+layer must exist, visible/unlocked, 100% opacity, with alpha lock off. Stored ink
+shade does not affect its preview color. All other eraser cases use app preview.
+
+This uses the normal native drawing callbacks with the captured CLEAR brush for
+canonical pixels/history. No erase-channel mode, contact-time shader setter or
+firmware gray/wide path is enabled. White feedback matches white paper for this
+restricted case; raster/firmware antialiasing and physical responsiveness still
+need the user's test. Mode status says `BOOX eraser · experimental white preview`.
+The existing input-mode button permits comparison with Android/app preview.
+Setup and handoff retain paused configuration, explicit reader enable and the
+450ms asynchronous reconciliation. Logs identify `native-white-eraser`, actual
+requested `ffffffff`, and `operation=erase`; `document-state.json` includes native
+eligibility and preview color. White never replaces CLEAR in saved artwork.
+
+`NativeEraserChecks` covers policy, width/zoom limits, lock/opacity/layer fallbacks,
+transparency and undo/redo. `AsyncSurfaceChecks` opens/closes the real white SDK
+session and switches back to black ink. This verifies setup, not physical native
+touchConsumer behavior. Keep the experiment distinct from accepted native ink.
 
 ## Native eraser investigation (2026-10-23)
 
@@ -17,7 +41,7 @@ and redraws bitmap/background during moves. Its [EraseRenderer](https://github.c
 also renders content in-app, with optional erase-circle/track feedback. These are
 evidence for app-managed erasing, not proof that all firmware lacks native erasing.
 
-Native white PENCIL feedback is a possible optimization when the erased result is
+Native white PENCIL feedback is an optimization candidate when the erased result is
 white paper. It would hide lower-layer content until reconciliation in general
 layered artwork, and would bypass alpha lock unless gated. White is mentioned in
 the older official Scribble API, but this app has physically accepted only black/

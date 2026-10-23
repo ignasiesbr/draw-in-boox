@@ -22,6 +22,13 @@ Keep layer names at least 14sp. Long-pressing the name opens rename; retain a vi
 
 Settings should use a dedicated settings model and one settings dialog entry point, with labeled sections as options grow. Avoid placing application preferences in artwork checkpoints or adding a separate preference mechanism for every feature.
 
+Undo and Redo live on the right of the drawing toolbar as outline-arrow actions,
+with accessible names and disabled states when their history stack is empty.
+Under Settings → History gestures, Undo (two-finger tap) and Redo (two-finger
+double tap) can each be disabled. Both start enabled. These choices affect
+shortcuts only: toolbar actions and pan/pinch/rotation remain available. A disabled
+double-tap redo does not fall through into undo. Preferences use Apply/Cancel.
+
 ## Refresh and feedback
 
 - Prefer immediate, discrete state changes to animated expansion, sliding drawers, ripples, pulsing selection, or animated icon transitions. Hide/show the panel in one layout change.

@@ -14,7 +14,9 @@ class HistoryTapGestures(
     private val remove: (Runnable) -> Unit,
     private val undo: () -> Unit,
     private val redo: () -> Unit,
-    private val trace: (String) -> Unit = {}
+    private val trace: (String) -> Unit = {},
+    private val undoEnabled: () -> Boolean = { true },
+    private val redoEnabled: () -> Boolean = { true }
 ) {
     private val origins = mutableMapOf<Int, PointF>()
     private var started = 0L
@@ -26,7 +28,7 @@ class HistoryTapGestures(
     private val single = Runnable {
         if (pendingSingle) {
             pendingSingle = false
-            if (eligible()) { trace("History gesture: undo"); undo() }
+            if (eligible() && undoEnabled()) { trace("History gesture: undo"); undo() }
         }
     }
 
@@ -37,6 +39,7 @@ class HistoryTapGestures(
     }
 
     fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!undoEnabled() && !redoEnabled()) { cancel(); return false }
         // Observe candidate touches without consuming them. Pan/pinch/twist must still
         // see every event and cancel this candidate when navigation begins.
         if (event.actionMasked != MotionEvent.ACTION_MOVE) {
@@ -78,8 +81,7 @@ class HistoryTapGestures(
             if (accepted) {
                 if (secondTap && pendingSingle) {
                     pendingSingle = false; remove(single)
-                    trace("History gesture: redo")
-                    redo()
+                    if (redoEnabled()) { trace("History gesture: redo"); redo() }
                 } else {
                     pendingSingle = true; firstReleased = event.eventTime
                     trace("History tap accepted: waiting ${doubleTapTimeout}ms")

@@ -1,10 +1,14 @@
 # BOOX Art
 
+Undo/Redo arrow buttons are on the drawing toolbar. In Settings → History gestures,
+disable Undo (two-finger tap) and Redo (two-finger double tap) separately, then Apply.
+Toolbar actions remain available when gestures are off; choices are remembered.
+
 Current native compatibility policy: gray and wide brushes use app-rendered live
 ink after a BOOX system pen-renderer crash. The fast native path remains for black
 brushes up to the accepted 30px footprint. See [the crash workaround](docs/NATIVE_PREVIEW_SAFETY.md).
 
-The drawing toolbar offers Ink, Tilt (default), Marker and Eraser. Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink/Tilt retain their 1–12px base range. Drawing-tool settings include eight opaque gray shades, shared across pens. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker and Eraser use app preview, which can feel slower than native black/narrow ink; the native crash guard remains. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
+The drawing toolbar offers Ink, Tilt (default), Marker and Eraser. Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink/Tilt retain their 1–12px base range. Drawing-tool settings include eight opaque gray shades, shared across pens. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker uses app preview, which can feel slower than native black/narrow ink; the native crash guard remains. Eraser currently trials native white feedback at <=30px on a single full-opacity layer with alpha lock off; other eraser cases use app preview. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
 
 Native Kotlin raster drawing prototype targeting the original BOOX Go 10.3, Android 12 (API 32).
 

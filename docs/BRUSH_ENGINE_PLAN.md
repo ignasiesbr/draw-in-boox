@@ -1,5 +1,79 @@
 # Brush system and drawing toolbar plan
 
+## Native-first expansion investigation (2026-10-23)
+
+Source availability follow-up: user confirmed this is a personal, noncommercial
+app and asked about cloning/modifying native code. Local reference clones now exist
+under ignored `.tools/references/OnyxAndroidDemo` (official demo, Apache-2.0,
+commit `ec512c79c0d39c1e294214d36580ce4c914bbea6`) and
+`.tools/references/onyx-android-sdk` (hbmartin community reconstruction,
+commit `c750d5e5ea30553063962f7bf31909e6d3d6f8ff`). They are inspection references,
+not integrated dependencies. No brush/firmware changes were made during this review.
+
+The [community reconstruction](https://github.com/hbmartin/onyx-android-sdk)
+publishes LGPL-3.0-only recovered first-party sources, including Rust input-reader
+and NeoPen renderer JNI implementations. It is not an official release of Onyx's
+firmware source. Its local `onyxsdk-pen/native/onyx-neo-pen/src/lib.rs` is editable
+brush geometry/texture code; `onyxsdk-pen/native/onyx-pen-touch-reader/src/lib.rs`
+is editable input capture. License/provenance must be considered by component;
+the pinned official pen 1.5.4.4 POM lists BSD-3, while pennative's POM has no license
+block. Do not extend demo/POM licenses to undocumented firmware components.
+
+Boundary: the clone's StrokeTransport/FirmwareBinderBackend still sends live-ink
+commands to the existing BOOX SurfaceFlinger service. Rebuilding app-side JNI or
+changing its brush math does not replace that service's painter/shaders. The prior
+SurfaceFlinger allocator crash is not thereby fixed. Matching customized app-side
+brushes to fast hardware preview still requires supported firmware parameters or
+a different display path. Firmware replacement is a separate system modification.
+
+Useful next investigation: compare the source-built SDK to the pinned official
+binaries in isolation on this Go103 before considering integration. Validate raw
+input, native live versus bitmap geometry, latency, lifecycle and memory; do not
+infer compatibility from upstream's reference-device results. The first native
+brush preset can still use official SDK wrappers without replacing the whole SDK.
+
+The user prioritizes BOOX black-pen responsiveness over expanding software-only
+brushes. Investigate native brush families before pursuing the software chisel/
+soft-brush sequence. No additional native styles have been enabled by this review.
+
+Inspection of the pinned `onyxsdk-pen:1.5.4.4` runtime confirms TouchHelper styles
+PENCIL=0, FOUNTAIN=1, MARKER=2, NEO_BRUSH=3, CHARCOAL=4, DASH=5,
+CHARCOAL_V2=6 and SQUARE_PEN=7. Presence is not proof of Go103 firmware support,
+safety, or matched final output. In particular SQUARE_PEN is not evidence that a
+configurable angled chisel tip is available. Our current adapter configures PENCIL
+for all accepted round paint presets; this is not the SDK's full style inventory.
+
+The SDK also contains NeoBrushPenWrapper, NeoFountainPenWrapper and
+NeoMarkerPenWrapper with compute/draw APIs for committed geometry, plus charcoal
+wrappers that accept PenRenderArgs and texture bitmaps. NeoPenConfigWrapper exposes
+type/color/width/rotateAngle/tiltEnabled/tiltScale/maxTouchPressure. Do not assume
+unverified hardness, spacing, arbitrary tip or texture controls from generic specs.
+
+Onyx's [NewBrushScribbleShape](https://github.com/onyx-intl/OnyxAndroidDemo/blob/master/app/OnyxPenDemo/src/main/java/com/onyx/android/eink/pen/demo/shape/NewBrushScribbleShape.java)
+uses NeoBrushPenWrapper for bitmap geometry. Its current
+[BrushScribbleShape](https://github.com/onyx-intl/OnyxAndroidDemo/blob/master/app/OnyxPenDemo/src/main/java/com/onyx/android/eink/pen/demo/shape/BrushScribbleShape.java)
+uses a fountain-specific NeoPen renderer. Upstream master and the pinned SDK can
+differ; family names alone do not establish bit-identical SurfaceFlinger rendering.
+
+Suggested next experiment: one separate BOOX Brush preset, then Fountain, using
+the corresponding vendor bitmap renderer for final pixels rather than our generic
+round geometry. Preserve existing Ink/Tilt/Marker behavior. Native-owned pressure
+response must not also receive our app-computed pressure/tilt width updates; choose
+one owner per preset. Configure only while paused, keep explicit reader enable,
+commit/history ownership, bounded worker snapshots and the 450ms handoff.
+
+Start with black, conservative small widths. Check vendor geometry/footprint before
+history capture, raw pressure provenance, zoom/rotation mapping, dots and short
+strokes, alpha-lock/opacity behavior, and native resource cleanup. Compare real pen
+feedback before/after lift and ordinary-fast writing on the tablet. Charcoal/textured
+styles follow only after confirming required textures, memory bounds and fidelity.
+Keep the gray/wide crash workaround; none of these APIs establish a fix for it.
+
+The supplied brush spec remains useful for presets, per-stroke capture, validation,
+history and presentation boundaries. Native families provide a narrower feature set
+with firmware-controlled behavior; arbitrary custom tips/softness/scatter/smudge
+still require a different implementation or an explicitly accepted approximation.
+
 Implemented follow-up (2026-10-23): Marker/grayscale and round Eraser are available.
 Tool settings open by tapping the selected toolbar icon again; separate right-side
 brush actions are removed. Eraser clears selected-layer pixels with live layer

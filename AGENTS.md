@@ -7,6 +7,11 @@ now use app-rendered live ink. Do not bypass this policy based on synthetic test
 Configure native parameters while drawing is paused, and never send contact-time
 width setters for a constant brush. The black/narrow native path retains the
 accepted pressure/tilt behavior and asynchronous handoff architecture below.
+User-authorized experiment after baseline commit `388add9`: `native-eraser-v1`
+permits white PENCIL feedback only for an eraser <=30 document AND screen px on
+exactly one visible/unlocked layer at 100% opacity with alpha lock off. Commits still
+CLEAR pixels. This is pending real-pen validation, not an accepted expansion of
+gray/wide native support. Other eraser cases keep app preview. See the safety doc.
 After SDK open, explicitly enable the input reader before enabling rendering;
 `openRawDrawing()` alone leaves TouchHelper's input flag false. Verify real SDK
 open/reopen readiness, not just the app's inputEnabled property.

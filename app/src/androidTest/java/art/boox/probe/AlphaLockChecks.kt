@@ -70,6 +70,22 @@ object AlphaLockChecks {
             check(surface.document!!.layer.getPixel(16, 16) == Color.TRANSPARENT)
             surface.commit(path, "android")
             check(surface.document!!.layer.getPixel(16, 16) == Color.TRANSPARENT)
+            surface.selectBrush(BrushPreset.INK.defaults())
+            val current = surface.document!!
+            check(NativePreviewPolicy.supports(surface.brush, current)) { "Alpha lock blocked native black feedback" }
+            for (y in 8..23) for (x in 8..23) current.layer.setPixel(x, y, Color.argb((x - 7) * 15, 255, 0, 0))
+            val beforeNative = current.layer.copy(Bitmap.Config.ARGB_8888, false)
+            try {
+                // Native preview can cross the mask. The completed raw stroke must
+                // preserve every alpha value and affect only existing layer pixels.
+                surface.commit(path, "boox", capturedBrush = surface.brush, deferPresentation = true)
+                for (y in 0..31) for (x in 0..31)
+                    check(Color.alpha(current.layer.getPixel(x, y)) == Color.alpha(beforeNative.getPixel(x, y)))
+                check(current.layer.getPixel(2, 16) == Color.TRANSPARENT)
+                check(Color.red(current.layer.getPixel(16, 16)) == 0)
+                check(surface.undo() && current.layer.sameAs(beforeNative))
+                check(surface.redo() && current.layer.getPixel(2, 16) == Color.TRANSPARENT)
+            } finally { beforeNative.recycle() }
             surface.dispose()
         } finally { doc.recycle(); directory.deleteRecursively() }
     }

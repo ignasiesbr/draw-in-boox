@@ -2,13 +2,23 @@ package art.boox.probe
 
 import android.graphics.Color
 
-/** The firmware's gray/wide shader path crashed SurfaceFlinger on this tablet.
- * Keep the physically accepted black/narrow envelope; other brushes use app pixels.
- * This is an app compatibility policy, not a published hardware maximum. */
+/** Keep the accepted black/narrow path. User-authorized white eraser experiment
+ * is restricted to cases where transparency reveals only white paper. */
 object NativePreviewPolicy {
     const val MAX_DOCUMENT_WIDTH = 30f
-    fun supports(brush: PressureBrush) = !brush.isEraser && brush.inkColor == Color.BLACK &&
-        brush.maxRenderedWidth <= MAX_DOCUMENT_WIDTH
+    fun color(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f): Int? {
+        if (brush.isEraser) {
+            // Do not expand the gray/wide crash workaround for this experiment.
+            // Bound screen width too: this white shader path is not yet pen-validated.
+            if (!scale.isFinite() || scale <= 0f || brush.maxRenderedWidth > MAX_DOCUMENT_WIDTH ||
+                brush.maxRenderedWidth * scale > MAX_DOCUMENT_WIDTH) return null
+            val layer = document?.layers?.singleOrNull() ?: return null
+            return if (document.canPaint && !layer.alphaLocked && layer.opacity == 100) Color.WHITE else null
+        }
+        return if (brush.inkColor == Color.BLACK && brush.maxRenderedWidth <= MAX_DOCUMENT_WIDTH) Color.BLACK else null
+    }
+    fun supports(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f) =
+        color(brush, document, scale) != null
 }
 
 /** SDK parameters can rebuild native shaders. Configure only with drawing paused,

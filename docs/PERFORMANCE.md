@@ -1,6 +1,13 @@
 # Stroke responsiveness investigation
 
-Current revision: `penPipeline=eraser-toolbar-v1` (retains `shader-safe-v2` input setup). After a confirmed SurfaceFlinger
+Current revision: `penPipeline=native-eraser-v1` (retains `shader-safe-v2` input setup).
+Baseline is committed as `388add9`. The user requested a native eraser trial:
+white feedback is limited to <=30 document/screen px, one full-opacity unlocked
+layer, alpha lock off. True CLEAR commits and 450ms background handoff are retained.
+Physical white-eraser performance and stability remain unverified; all other eraser
+cases retain app preview. See NATIVE_PREVIEW_SAFETY.md for the experiment's scope.
+
+After a confirmed SurfaceFlinger
 native allocator-race abort with a gray/wide Marker, native preview is restricted
 to the previously accepted black/up-to-30px footprint envelope. Gray/wide brushes
 use coalesced app live preview through the background worker. Native configuration

@@ -8,11 +8,14 @@ object HistoryTapChecks {
     fun run() {
         var now = 0L
         var eligible = true
+        var undoEnabled = true
+        var redoEnabled = true
         val tasks = mutableMapOf<Runnable, Long>()
         val actions = mutableListOf<String>()
         val taps = HistoryTapGestures(20f, 300L, { eligible },
             post = { task, delay -> tasks[task] = now + delay }, remove = { tasks.remove(it) },
-            undo = { actions += "undo" }, redo = { actions += "redo" })
+            undo = { actions += "undo" }, redo = { actions += "redo" },
+            undoEnabled = { undoEnabled }, redoEnabled = { redoEnabled })
         var dispatch: (MotionEvent) -> Boolean = taps::onTouchEvent
         fun advance(time: Long) {
             require(time >= now)
@@ -38,13 +41,13 @@ object HistoryTapChecks {
         }
         fun down(index: Int) = MotionEvent.ACTION_POINTER_DOWN or (index shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
         fun up(index: Int) = MotionEvent.ACTION_POINTER_UP or (index shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
-        fun chord(time: Long) {
+        fun chord(time: Long, accepted: Boolean = true) {
             check(!send(time, MotionEvent.ACTION_DOWN, listOf(3)))
             check(!send(time + 20, down(1), listOf(3, 9)))
             // Indices reorder without moving the physical contacts.
             check(!send(time + 40, MotionEvent.ACTION_MOVE, listOf(9, 3)))
             check(!send(time + 60, up(0), listOf(9, 3)))
-            check(send(time + 100, MotionEvent.ACTION_UP, listOf(3)))
+            check(send(time + 100, MotionEvent.ACTION_UP, listOf(3)) == accepted)
         }
 
         chord(100)
@@ -122,7 +125,8 @@ object HistoryTapChecks {
             pan = { _, _ -> pans++ }, rotation = { rotations++ }, zoom = { _, _, _ -> zooms++ }, end = {})
         combined = HistoryTapGestures(20f, 300L, { !navigation.active },
             post = { task, delay -> tasks[task] = now + delay }, remove = { tasks.remove(it) },
-            undo = { actions += "undo" }, redo = { actions += "redo" })
+            undo = { actions += "undo" }, redo = { actions += "redo" },
+            undoEnabled = { undoEnabled }, redoEnabled = { redoEnabled })
         dispatch = { event ->
             val consumed = combined.onTouchEvent(event)
             if (consumed) navigation.cancel() else navigation.onTouchEvent(event)
@@ -158,5 +162,40 @@ object HistoryTapChecks {
         send(12900, MotionEvent.ACTION_UP, listOf(3))
         advance(13200)
         check(actions == listOf("undo"))
+        // Independent toggles keep single/double-tap meanings stable.
+        dispatch = taps::onTouchEvent
+        actions.clear(); undoEnabled = false
+        chord(14000); advance(14500)
+        check(actions.isEmpty())
+        chord(14600); chord(14850); advance(15400)
+        check(actions == listOf("redo")) { "Disabling undo also disabled redo" }
+        actions.clear(); undoEnabled = true; redoEnabled = false
+        chord(15500); advance(16000)
+        check(actions == listOf("undo"))
+        actions.clear(); chord(16100); chord(16350); advance(16900)
+        check(actions.isEmpty()) { "Disabled redo became undo" }
+        undoEnabled = false
+        chord(17000, accepted = false); chord(17250, accepted = false); advance(17800)
+        check(actions.isEmpty() && tasks.isEmpty())
+        undoEnabled = true; redoEnabled = true
+        chord(18000); undoEnabled = false; advance(18500)
+        check(actions.isEmpty()) { "A disabled pending undo fired" }
+
+        // Turning both shortcuts off must not swallow two-finger navigation.
+        redoEnabled = false
+        dispatch = { event ->
+            val consumed = combined.onTouchEvent(event)
+            if (consumed) navigation.cancel() else navigation.onTouchEvent(event)
+            consumed
+        }
+        val previousPans = pans
+        send(19000, MotionEvent.ACTION_DOWN, listOf(3))
+        send(19020, down(1), listOf(3, 9))
+        send(19040, MotionEvent.ACTION_MOVE, listOf(3, 9), move = 40f)
+        check(navigation.active && pans > previousPans)
+        send(19060, up(1), listOf(3, 9), move = 40f)
+        send(19100, MotionEvent.ACTION_UP, listOf(3), move = 40f)
+        advance(19700)
+        check(actions.isEmpty() && !navigation.active)
     }
 }

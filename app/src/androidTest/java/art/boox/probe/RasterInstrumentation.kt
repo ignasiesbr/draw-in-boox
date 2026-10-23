@@ -89,6 +89,7 @@ class RasterInstrumentation : Instrumentation() {
                     MarkerChecks.run(targetContext)
                     EraserChecks.run(targetContext)
                     NativePreviewSafetyChecks.run(targetContext)
+                    NativeEraserChecks.run()
                     DirtyFrameChecks.run(targetContext)
                     StrokePresentationChecks.run(targetContext)
                 } finally { file.delete() }

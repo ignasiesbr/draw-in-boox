@@ -1,5 +1,32 @@
 # Feature maintenance guide
 
+Alpha-lock native feedback: user explicitly accepts preview crossing the mask
+until reconciliation. Supported black paint remains native with alpha lock on;
+canonical SRC_ATOP pixels/history preserve all source alpha. Real SDK open is
+checked under alpha lock and AlphaLockChecks verifies raw-source commit/undo/redo.
+Gray/wide native shader restrictions are independent and still apply.
+
+History controls (`uiRevision=history-controls-v1`): Undo/Redo are accessible
+outline-arrow actions on the brush toolbar, replacing the top-row text buttons.
+Their enabled state follows history, independently of gesture preferences.
+Settings has separate Undo two-finger tap and Redo two-finger double-tap checkboxes,
+both enabled by default. AppSettingsStore saves `undo_gesture_enabled` and
+`redo_gesture_enabled` alongside layer-panel position; artwork and ink settings are
+untouched. Applying gesture changes cancels queued tap recognition; gesture-only
+changes do not rearrange the panel or explicitly reconfigure native input.
+The recognizer still distinguishes single from double taps when only one shortcut
+is enabled: disabled redo must never become undo, and disabling undo must preserve
+redo. With both disabled, navigation receives all touch events. HistoryTapChecks
+covers all combinations, delayed suppression and navigation; SettingsChecks covers
+defaults, persistence, dialog Apply/Cancel and manual history while gestures are off.
+
+Native eraser trial after baseline commit `388add9`: `native-eraser-v1` permits
+white PENCIL feedback only at <=30 document/screen px on exactly one visible,
+unlocked, 100%-opacity layer, alpha lock off. Canonical edits remain CLEAR.
+`NativePreviewPolicy.color` is context-aware for this case; callers must pass the
+document and zoom. Do not broaden black/gray/wide policy or omit fallback on layer/
+opacity/alpha-lock/zoom changes. Physical trial is pending; see NATIVE_PREVIEW_SAFETY.md.
+
 Current brush UI: tap a tool to select; tap the selected tool to edit size/dynamics/
 shade. No separate right-side brush actions. Eraser (`eraser` ID) is a fixed round
 1–128px CLEAR brush with its own saved size and Erase history label. It respects

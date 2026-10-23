@@ -27,9 +27,10 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
     fun open(): Boolean {
         close()
         if (!view.canDraw) return false
-        if (!NativePreviewPolicy.supports(view.brush)) {
+        if (!NativePreviewPolicy.supports(view.brush, view.document, view.viewport.transform.scale)) {
             Log.i("BooxProbe", "App brush preview: firmware shader workaround colorArgb=${Integer.toHexString(view.brush.inkColor)} maxDocumentWidth=${view.brush.maxRenderedWidth}")
-            status(if (view.brush.isEraser) "App preview · eraser" else "App preview · gray or wide brush")
+            status(if (view.brush.isEraser) "App eraser · needs ≤30px at this zoom, one full-opacity layer, alpha lock off"
+                else "App preview · gray or wide brush")
             return false
         }
         return try {
@@ -59,7 +60,11 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             val location = IntArray(2).also { view.getLocationOnScreen(it) }
             Log.i("BooxProbe", "rawCreated=${created.isRawDrawingCreated} input=${created.isRawDrawingInputEnabled} render=${created.isRawDrawingRenderEnabled} pressureMax=$maximum region=${view.width}x${view.height} origin=${location.joinToString()}")
             if (!view.rawInput) { close(); status("BOOX did not enable input. Android pen mode.") }
-            else status("BOOX pen ready · pressure controls width")
+            else status(when {
+                view.brush.isEraser -> "BOOX eraser · experimental white preview"
+                view.document?.activeLayer?.alphaLocked == true -> "BOOX pen · alpha lock applied to committed ink"
+                else -> "BOOX pen ready · pressure controls width"
+            })
             view.rawInput
         } catch (error: LinkageError) { failure(error); false }
         catch (error: Exception) { failure(error); false }
@@ -99,18 +104,20 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
     }
 
     private fun resumePreview(target: TouchHelper, handoff: Boolean = false) {
-        check(NativePreviewPolicy.supports(view.brush)) { "Brush is outside the validated native preview policy" }
+        val color = checkNotNull(NativePreviewPolicy.color(view.brush, view.document, view.viewport.transform.scale)) {
+            "Brush is outside the native preview policy"
+        }
         val started = StrokePerformance.now()
         val width = view.brush.maxWidth * view.viewport.transform.scale
         // Explicitly enable the reader on first open; the SDK call is a no-op when
         // already enabled at handoff. Shader parameters are set with rendering paused.
-        NativePreviewConfiguration.apply(width, view.brush.inkColor,
+        NativePreviewConfiguration.apply(width, color,
             rendering = { target.setRawDrawingRenderEnabled(it) },
             setColor = { target.setStrokeColor(it) }, setWidth = { target.setStrokeWidth(it) },
             setPencil = { target.setStrokeStyle(TouchHelper.STROKE_STYLE_PENCIL) },
             enableInput = { target.setRawInputReaderEnable(true) })
         StrokePerformance.log("nativeResume handoff=$handoff configuredWhilePaused=true totalMs=${StrokePerformance.ms(started)}")
-        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(view.brush.inkColor)}")
+        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
     }
 
     private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {

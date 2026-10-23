@@ -87,7 +87,7 @@ object BrushSettingsDialog {
             val settings = draft()
             explanation.text = settings?.let {
                 val brush = it.compile()
-                if (eraser) "Erases the selected layer. Turn off alpha lock to erase."
+                if (eraser) "Erases the selected layer. Alpha lock must be off. Native preview: up to 30px at this zoom on one full-opacity layer."
                 else "Width ${brush.minWidth}–${brush.maxWidth} px; maximum with tilt ${brush.maxRenderedWidth} px"
             } ?: "Enter a size from $range."
             preview.invalidate()

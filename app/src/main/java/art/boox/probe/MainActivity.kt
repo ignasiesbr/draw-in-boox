@@ -21,8 +21,8 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var mode: Button
     private lateinit var documentInfo: TextView
-    private lateinit var undoButton: Button
-    private lateinit var redoButton: Button
+    private lateinit var undoButton: EinkIconButton
+    private lateinit var redoButton: EinkIconButton
     private lateinit var layerPanel: LayerPanel
     private lateinit var clearButton: Button
     private lateinit var settingsStore: AppSettingsStore
@@ -64,9 +64,6 @@ class MainActivity : Activity() {
         }
         button(toolbar, "Refresh") { surface.render(); adapter.refresh() }
         button(toolbar, "Export PNG") { export() }
-        undoButton = button(toolbar, "Undo") { if (!surface.undo()) historyBusy() }
-        redoButton = button(toolbar, "Redo") { if (!surface.redo()) historyBusy() }
-        undoButton.isEnabled = false; redoButton.isEnabled = false
         clearButton = button(toolbar, "Clear") {
             android.app.AlertDialog.Builder(this).setMessage("Clear the selected layer?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
@@ -99,6 +96,7 @@ class MainActivity : Activity() {
         }
         root.addView(status)
         surface = RasterSurface(this, strokeFinished = ::recordStroke)
+        surface.configureHistoryGestures(settings.undoGestureEnabled, settings.redoGestureEnabled)
         brushStore = BrushSettingsStore(this)
         surface.selectBrush(brushStore.load(brushStore.selected()))
         adapter = BooxPenAdapter(surface) { message ->
@@ -135,6 +133,16 @@ class MainActivity : Activity() {
         brushLabel = TextView(this).apply { textSize = 16f; setTextColor(Color.BLACK)
             gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, 0, 0) }
         drawingTools.addView(brushLabel, LinearLayout.LayoutParams(0, dp(52), 1f))
+        undoButton = EinkIconButton(this, UiIcon.UNDO, "Undo").apply {
+            tag = "Undo"; isEnabled = false
+            setOnClickListener { if (!surface.undo()) historyBusy() }
+        }
+        redoButton = EinkIconButton(this, UiIcon.REDO, "Redo").apply {
+            tag = "Redo"; isEnabled = false
+            setOnClickListener { if (!surface.redo()) historyBusy() }
+        }
+        drawingTools.addView(undoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
+        drawingTools.addView(redoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
         root.addView(drawingTools)
         updateBrushControls()
         canvasArea = FrameLayout(this)
@@ -162,7 +170,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=eraser-toolbar-v1")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=history-controls-v1")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -178,22 +186,27 @@ class MainActivity : Activity() {
     }
 
     private fun showSettings() {
-        if (surface.isDrawing || surface.isNavigating) {
+        if (surface.isDrawing || surface.isNavigating || adapter.isBusy) {
             Toast.makeText(this, "Finish drawing or navigation before opening settings.", Toast.LENGTH_SHORT).show()
             return
         }
         SettingsDialog.show(this, settings) { updated ->
             if (updated == settings) true
-            else if (!surface.preparePanelResize()) {
+            else if (surface.isDrawing || surface.isNavigating || adapter.isBusy) {
                 Toast.makeText(this, "Finish drawing or navigation before changing settings.", Toast.LENGTH_SHORT).show()
                 false
             } else {
+                val sideChanged = updated.layerPanelSide != settings.layerPanelSide
+                if (sideChanged && !surface.preparePanelResize()) return@show false
                 settings = updated
                 settingsStore.save(updated)
-                arrangeDrawingArea()
+                surface.configureHistoryGestures(updated.undoGestureEnabled, updated.redoGestureEnabled)
                 // Position, rather than size, can change. Explicitly reopen raw input
                 // after layout so the BOOX screen-space input region follows the canvas.
-                drawingArea.post { schedulePenConfiguration() }
+                if (sideChanged) {
+                    arrangeDrawingArea()
+                    drawingArea.post { schedulePenConfiguration() }
+                }
                 true
             }
         }
@@ -273,7 +286,8 @@ class MainActivity : Activity() {
             .put("scale", transform.scale).put("x", transform.x).put("y", transform.y)
             .put("rotationDegrees", transform.rotationDegrees)
             .put("mode", if (surface.rawInput) "boox" else "android")
-            .put("nativePreviewSupported", NativePreviewPolicy.supports(surface.brush))
+            .put("nativePreviewSupported", NativePreviewPolicy.supports(surface.brush, document, surface.viewport.transform.scale))
+            .put("nativePreviewColorArgb", NativePreviewPolicy.color(surface.brush, document, surface.viewport.transform.scale) ?: JSONObject.NULL)
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
             .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
@@ -391,7 +405,9 @@ class MainActivity : Activity() {
             .put("maxRenderedWidthPx", captured.maxRenderedWidth)
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
-            .put("settingsVersion", 2).put("preview", if (source == "boox") "native-round-width" else "app-round-brush")
+            .put("settingsVersion", 2).put("preview", if (source == "boox") {
+                if (captured.isEraser) "native-white-eraser" else "native-round-width"
+            } else "app-round-brush")
             .put("operation", if (captured.isEraser) "erase" else "paint")
             .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))
         val entry = JSONObject().put("schemaVersion", 8).put("source", source).put("stroke", number)

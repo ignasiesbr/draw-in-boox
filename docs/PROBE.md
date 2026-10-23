@@ -1,5 +1,11 @@
 # Kotlin drawing prototype: working guide
 
+Trial build: `penPipeline=native-eraser-v1`, after baseline commit `388add9`.
+Select Eraser, tap it again and choose e.g. 24px at 100% zoom on a single full-opacity
+layer with alpha lock off. Status must say `BOOX eraser · experimental white preview`.
+Use the input-mode button for Android comparison. True erased transparency, undo
+and gray/wide fallback are preserved. The user will assess real pen feedback.
+
 Current build marker: `penPipeline=eraser-toolbar-v1`. Adds selected-tool settings
 and a layer eraser, retaining shader-safe-v2 native input setup. See BRUSHES.md.
 
