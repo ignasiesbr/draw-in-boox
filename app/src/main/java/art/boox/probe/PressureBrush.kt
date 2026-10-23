@@ -10,7 +10,9 @@ import kotlin.math.hypot
 
 data class PenSample(
     val x: Float, val y: Float, val pressure: Float, val time: Long,
-    val rawPressure: Float = pressure
+    val rawPressure: Float = pressure,
+    val tiltRadians: Float? = null, val viewOrientationRadians: Float? = null,
+    val rawTiltX: Int? = null, val rawTiltY: Int? = null
 )
 
 data class PressureRange(val min: Float, val max: Float, val origin: String) {
@@ -26,8 +28,10 @@ data class PressureRange(val min: Float, val max: Float, val origin: String) {
 data class PenStroke(val samples: List<PenSample>, val source: String, val pressureRange: PressureRange)
 
 /** Shared pressure curve and geometry for Android preview, bitmap commit, and replay. */
-class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f) {
-    init { require(minWidth > 0 && maxWidth >= minWidth) }
+class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
+    val widthModifier: StrokeWidthModifier = TiltWidthModifier()) {
+    init { require(minWidth > 0 && maxWidth >= minWidth)
+        require(widthModifier.maxMultiplier.isFinite() && widthModifier.maxMultiplier >= 1f) }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; style = Paint.Style.FILL }
     private val alphaLockMode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
     private val path = Path()
@@ -35,19 +39,23 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f) {
     fun width(pressure: Float): Float = minWidth + (maxWidth - minWidth) *
         (if (pressure.isFinite()) pressure.coerceIn(0f, 1f) else 0f)
 
+    val maxRenderedWidth: Float get() = maxWidth * widthModifier.maxMultiplier
+    fun width(sample: PenSample): Float = width(sample.pressure) *
+        widthModifier.multiplier(sample).let { if (it.isFinite()) it.coerceIn(1f, widthModifier.maxMultiplier) else 1f }
+
     fun draw(canvas: Canvas, samples: List<PenSample>, alphaLocked: Boolean = false) {
         if (samples.isEmpty()) return
         paint.xfermode = if (alphaLocked) alphaLockMode else null
         try {
             var previous = samples.first()
-            canvas.drawCircle(previous.x, previous.y, width(previous.pressure) / 2, paint)
+            canvas.drawCircle(previous.x, previous.y, width(previous) / 2, paint)
             for (i in 1 until samples.size) {
                 val current = samples[i]
                 val dx = current.x - previous.x
                 val dy = current.y - previous.y
                 val length = hypot(dx, dy)
-                val a = width(previous.pressure) / 2
-                val b = width(current.pressure) / 2
+                val a = width(previous) / 2
+                val b = width(current) / 2
                 if (length > 0f) {
                     val nx = -dy / length
                     val ny = dx / length

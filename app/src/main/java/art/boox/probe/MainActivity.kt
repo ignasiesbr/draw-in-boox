@@ -309,14 +309,18 @@ class MainActivity : Activity() {
         val source = stroke.source
         strokeCount++
         val points = JSONArray()
-        samples.forEach { p -> points.put(JSONArray().put(p.x).put(p.y).put(p.pressure).put(p.time).put(p.rawPressure)) }
+        samples.forEach { p -> points.put(JSONArray().put(p.x).put(p.y).put(p.pressure).put(p.time).put(p.rawPressure)
+            .put(p.tiltRadians ?: JSONObject.NULL).put(p.viewOrientationRadians ?: JSONObject.NULL)
+            .put(p.rawTiltX ?: JSONObject.NULL).put(p.rawTiltY ?: JSONObject.NULL)) }
         val range = JSONObject().put("min", stroke.pressureRange.min).put("max", stroke.pressureRange.max)
             .put("origin", stroke.pressureRange.origin)
         val brush = JSONObject().put("minWidthPx", surface.brush.minWidth).put("maxWidthPx", surface.brush.maxWidth)
-            .put("curve", "linear")
+            .put("curve", "linear").put("widthModifier", surface.brush.widthModifier.id)
+            .put("maxWidthMultiplier", surface.brush.widthModifier.maxMultiplier)
+            .put("maxRenderedWidthPx", surface.brush.maxRenderedWidth)
         val document = checkNotNull(surface.document)
         val transform = surface.viewport.transform
-        val entry = JSONObject().put("schemaVersion", 4).put("source", source).put("stroke", strokeCount)
+        val entry = JSONObject().put("schemaVersion", 5).put("source", source).put("stroke", strokeCount)
             .put("pressureRange", range).put("brush", brush)
             .put("documentId", document.id).put("layerId", document.layerId)
             .put("coordinateSpace", "document").put("canvasWidth", document.spec.width).put("canvasHeight", document.spec.height)
@@ -329,7 +333,11 @@ class MainActivity : Activity() {
         val low = (samples.minOf { it.pressure } * 100).toInt()
         val high = (samples.maxOf { it.pressure } * 100).toInt()
         val message = "Stroke $strokeCount · $source · ${samples.size} points · pressure $low–$high%"
-        status.text = message
+        val tilts = samples.mapNotNull { it.tiltRadians }
+        val tiltInfo = if (tilts.isEmpty()) "tilt unavailable" else
+            "tilt ${Math.toDegrees(tilts.min().toDouble()).toInt()}-${Math.toDegrees(tilts.max().toDouble()).toInt()} deg"
+        status.text = "$message | $tiltInfo"
+        Log.i("BooxProbe", "$tiltInfo rawTiltX=${samples.mapNotNull { it.rawTiltX }.let { it.minOrNull() to it.maxOrNull() }} rawTiltY=${samples.mapNotNull { it.rawTiltY }.let { it.minOrNull() to it.maxOrNull() }}")
         val outside = samples.count { it.x < 0 || it.y < 0 || it.x >= document.spec.width || it.y >= document.spec.height }
         Log.i("BooxProbe", "$message raw=${samples.minOf { it.rawPressure }}–${samples.maxOf { it.rawPressure }} max=${stroke.pressureRange.max} outside=$outside")
     }

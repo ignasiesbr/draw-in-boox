@@ -322,13 +322,12 @@ class RasterSurface(
         }
         val index = event.findPointerIndex(activePointer)
         if (index < 0 || event.getToolType(index) != MotionEvent.TOOL_TYPE_STYLUS) return true
-        for (h in 0 until event.historySize) {
-            val raw = event.getHistoricalPressure(index, h)
-            pending += strokeTransform.map(PenSample(event.getHistoricalX(index, h), event.getHistoricalY(index, h),
-                pressureRange.normalize(raw), event.getHistoricalEventTime(h), raw))
+        fun addSample(history: Int?) {
+            val sample = PenTilt.sample(event, index, history)
+            pending += strokeTransform.map(sample.copy(pressure = pressureRange.normalize(sample.rawPressure)))
         }
-        val raw = event.getPressure(index)
-        pending += strokeTransform.map(PenSample(event.getX(index), event.getY(index), pressureRange.normalize(raw), event.eventTime, raw))
+        for (h in 0 until event.historySize) addSample(h)
+        addSample(null)
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
             val samples = pending.toList()
             pending.clear(); activePointer = -1

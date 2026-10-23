@@ -25,7 +25,7 @@ interface DocumentEdit {
 class StrokeEdit(private val samples: List<PenSample>, private val brush: PressureBrush) : DocumentEdit {
     override val label = "Stroke"
     override fun affectedRegions(spec: CanvasSpec): List<Rect> {
-        val padding = brush.maxWidth / 2f + 2f
+        val padding = brush.maxRenderedWidth / 2f + 2f
         var previous = samples.firstOrNull() ?: return emptyList()
         return samples.mapNotNull { point ->
             val rect = RectF(min(previous.x, point.x) - padding, min(previous.y, point.y) - padding,

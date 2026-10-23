@@ -37,3 +37,5 @@ The gear opens extensible app settings, currently layer-panel side (right by def
 Long-press a layer thumbnail for per-layer settings, currently an undoable 0-100% opacity slider with Apply/Cancel.
 
 Layer settings also supports Alpha lock: paint within existing transparency, with combined Apply/Cancel, undo/redo and persistence.
+
+A [replaceable tilt-width modifier](docs/BRUSHES.md) now prepares the brush system: tilted samples widen strokes while pressure still sets base width. BOOX live width now shares the complete pressure/tilt calculation through a guarded native PENCIL update bridge; the user confirmed much better matching before and after pen-up.

@@ -13,6 +13,7 @@ import com.onyx.android.sdk.pen.data.TouchPointList
 class BooxPenAdapter(private val view: RasterSurface, private val status: (String) -> Unit) {
     private var helper: TouchHelper? = null
     private var generation = 0
+    private var liveWidth: LivePreviewWidth? = null
     private fun failure(error: Throwable) {
         Log.e("BooxProbe", "BOOX SDK failure", error)
         close()
@@ -57,6 +58,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
 
     fun close() {
         generation++
+        liveWidth?.finish(); liveWidth = null
         val previous = helper
         helper = null
         view.rawInput = false
@@ -82,51 +84,75 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
 
     private fun resumePreview(target: TouchHelper) {
         target.setRawDrawingEnabled(true)
-        // SFTouchRender.openDrawing() resets the firmware style to PENCIL. Apply the brush
-        // after opening/resuming, as OnyxPenDemo does, including every bitmap handoff.
+        // The app now supplies pressure+tilt width during each stroke. PENCIL avoids
+        // applying the firmware fountain pressure curve a second time. Reapply after
+        // every handoff; do not reopen the renderer for individual width updates.
         val width = view.brush.maxWidth * view.viewport.transform.scale
         target.setStrokeColor(Color.BLACK)
             .setStrokeWidth(width)
-            .setStrokeStyle(TouchHelper.STROKE_STYLE_FOUNTAIN)
-        Log.d("BooxProbe", "Hardware preview: fountain viewWidth=$width zoom=${view.viewport.transform.scale}")
+            .setStrokeStyle(TouchHelper.STROKE_STYLE_PENCIL)
+        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale}")
     }
 
-    private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String) = object : RawInputCallback() {
-        override fun onBeginRawDrawing(b: Boolean, p: TouchPoint) {
-            view.post { if (session == generation && view.inputEnabled && view.rawInput) view.beginRawStroke() }
-            Log.d("BooxProbe", "raw begin x=${p.x} y=${p.y} pressure=${p.pressure}")
-        }
-        override fun onEndRawDrawing(b: Boolean, p: TouchPoint) {
-            view.post { if (session == generation) view.endRawStroke() }
-            Log.d("BooxProbe", "raw end x=${p.x} y=${p.y} pressure=${p.pressure}")
-        }
-        override fun onRawDrawingTouchPointMoveReceived(p: TouchPoint) = Unit
-        override fun onRawDrawingTouchPointListReceived(points: TouchPointList) {
-            val samples = points.points.map {
-                transform.map(PenSample(it.x, it.y, range.normalize(it.pressure), it.timestamp, it.pressure))
-            }
-            view.post {
-                // Do not commit a callback queued by an old mode, surface, or paused activity.
+    private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {
+        val width = LivePreviewWidth(widthForSample = { view.brush.width(it) * transform.scale },
+            post = { task, delay -> view.postDelayed(task, delay) }, remove = { view.removeCallbacks(it) },
+            apply = { pixels ->
                 if (session == generation && view.inputEnabled && view.rawInput) {
-                    // Raw input uses the bounding rectangle; strokes starting in a gray
-                    // corner must not become artwork. The bitmap clips crossings at its edge.
-                    val first = samples.firstOrNull()
-                    val spec = view.document?.spec
-                    if (first != null && spec != null && first.x >= 0 && first.y >= 0 &&
-                        first.x < spec.width && first.y < spec.height) {
-                        view.commit(samples, "boox", range, layerId)
-                    } else view.render()
-                    try {
-                        helper?.let { active -> active.setRawDrawingEnabled(false); resumePreview(active) }
-                    }
+                    try { helper?.setStrokeWidth(pixels) }
                     catch (error: Exception) { failure(error) }
                     catch (error: LinkageError) { failure(error) }
                 }
+            })
+        liveWidth = width
+        fun sample(p: TouchPoint) = PenSample(p.x, p.y, range.normalize(p.pressure), p.timestamp,
+            p.pressure, PenTilt.boox(p.tiltX, p.tiltY), rawTiltX = p.tiltX, rawTiltY = p.tiltY)
+        return object : RawInputCallback() {
+            private var moves = 0
+            override fun onBeginRawDrawing(b: Boolean, p: TouchPoint) {
+                moves = 0
+                width.begin(sample(p))
+                view.post { if (session == generation && view.inputEnabled && view.rawInput) view.beginRawStroke() }
+                Log.d("BooxProbe", "raw begin x=${p.x} y=${p.y} pressure=${p.pressure}")
             }
+            override fun onEndRawDrawing(b: Boolean, p: TouchPoint) {
+                width.finish()
+                view.post { if (session == generation) view.endRawStroke() }
+                Log.d("BooxProbe", "raw end x=${p.x} y=${p.y} pressure=${p.pressure}")
+            }
+            override fun onRawDrawingTouchPointMoveReceived(p: TouchPoint) {
+                moves++; width.update(sample(p))
+            }
+            override fun onRawDrawingTouchPointListReceived(points: TouchPointList) {
+                width.finish()
+                Log.d("BooxProbe", "Live width preview moves=$moves widthUpdates=${width.appliedCount} sentWidthPx=${width.appliedRange}")
+                val samples = points.points.map {
+                    transform.map(PenSample(it.x, it.y, range.normalize(it.pressure), it.timestamp, it.pressure,
+                        PenTilt.boox(it.tiltX, it.tiltY), rawTiltX = it.tiltX, rawTiltY = it.tiltY))
+                }
+                view.post {
+                    // Do not commit a callback queued by an old mode, surface, or paused activity.
+                    if (session == generation && view.inputEnabled && view.rawInput) {
+                        // Raw input uses the bounding rectangle; strokes starting in a gray
+                        // corner must not become artwork. The bitmap clips crossings at its edge.
+                        val first = samples.firstOrNull()
+                        val spec = view.document?.spec
+                        if (first != null && spec != null && first.x >= 0 && first.y >= 0 &&
+                            first.x < spec.width && first.y < spec.height) {
+                            view.commit(samples, "boox", range, layerId)
+                        } else view.render()
+                        try {
+                            helper?.let { active -> active.setRawDrawingEnabled(false); resumePreview(active) }
+                        }
+                        catch (error: Exception) { failure(error) }
+                        catch (error: LinkageError) { failure(error) }
+                    }
+                }
+            }
+            override fun onBeginRawErasing(b: Boolean, p: TouchPoint) = Unit
+            override fun onEndRawErasing(b: Boolean, p: TouchPoint) = Unit
+            override fun onRawErasingTouchPointMoveReceived(p: TouchPoint) = Unit
+            override fun onRawErasingTouchPointListReceived(points: TouchPointList) = Unit
         }
-        override fun onBeginRawErasing(b: Boolean, p: TouchPoint) = Unit
-        override fun onEndRawErasing(b: Boolean, p: TouchPoint) = Unit
-        override fun onRawErasingTouchPointMoveReceived(p: TouchPoint) = Unit
-        override fun onRawErasingTouchPointListReceived(points: TouchPointList) = Unit
     }
 }

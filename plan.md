@@ -217,3 +217,5 @@ Layer UI follow-up complete: right-side default with persistent left/right setti
 Per-layer settings added: thumbnail long-press opens an opacity draft slider (0-100%), Apply/Cancel, undo/redo and persistence. Composition, duplicate, merge and PNG respect opacity. Full device checks and build/lint pass; BOOX live pen ink remains full black until pen-up.
 
 Alpha lock delivered in layer settings: preserve pixel alpha during strokes, combined opacity/alpha-lock Apply/Cancel, undo/redo and persistence. Clear is protected; BOOX preview masking is applied at pen-up.
+
+Brush preparation: tilt capture and replaceable width dynamics implemented, with wider tilted strokes and pressure retained. Build/lint and full device tests pass; physical tilt response pending. See docs/BRUSHES.md before the full brush-engine milestone.

@@ -63,6 +63,8 @@ class RasterInstrumentation : Instrumentation() {
                     LayerRenameChecks.run(targetContext)
                     LayerOpacityChecks.run(targetContext)
                     AlphaLockChecks.run(targetContext)
+                    TiltChecks.run(targetContext)
+                    LivePreviewWidthChecks.run()
                 } finally { file.delete() }
               } catch (error: Throwable) { failure = error }
             }
