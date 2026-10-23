@@ -1,0 +1,16 @@
+[package]
+name = "boox-art-recovered-renderer"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0-only"
+publish = false
+
+[lib]
+name = "neopen_jni"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jni = { version = "=0.22.4", default-features = false }
+
+[profile.release]
+panic = "unwind"

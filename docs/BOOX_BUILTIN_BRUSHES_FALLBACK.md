@@ -4,6 +4,12 @@ Fallback plan, 2026-10-23. This route does not depend on the recovered/community
 SDK experiment. Known working app baseline: `29c7373` (earlier baseline `388add9`).
 The baseline APK is saved locally under `.tools/baselines/29c7373/app-debug.apk`.
 
+Implementation follow-up: the experiment now contains a working Lab-only Fountain
+adapter (`BooxFountainGeometry.kt`) that also passes device checks against the
+original SDK using `dev.ps1 test -Lab -FountainOnly`. This is a concrete starting
+point for the official-only route; geometry matching to firmware still needs pen
+testing. See RECOVERED_RENDERER_EXPERIMENT.md for the source/original comparison.
+
 ## Scope and evidence
 
 Keep official `com.onyx.android.sdk:onyxsdk-pen:1.5.4.4`. Its TouchHelper exposes:

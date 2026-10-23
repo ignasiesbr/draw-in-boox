@@ -1,5 +1,13 @@
 # Drawing performance: preserve the accepted baseline
 
+The source-renderer trial is isolated in `art.boox.probe.lab`; see
+[docs/RECOVERED_RENDERER_EXPERIMENT.md](docs/RECOVERED_RENDERER_EXPERIMENT.md).
+Stable checkpoint is `29c7373`. Lab-only Fountain uses firmware FOUNTAIN plus an
+editable app-side Rust renderer; this does not replace firmware. Existing tools
+retain app-width PENCIL. Never apply both vendor and app pressure to the Lab preset.
+The official-SDK alternative is documented separately in
+[docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
+
 Native crash guard: read [docs/NATIVE_PREVIEW_SAFETY.md](docs/NATIVE_PREVIEW_SAFETY.md)
 before changing native preview policy. A gray/wide Marker caused a SurfaceFlinger
 allocator-race abort on this firmware. Gray or >30px declared-footprint brushes

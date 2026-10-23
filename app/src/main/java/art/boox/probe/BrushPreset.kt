@@ -7,11 +7,13 @@ enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val 
     TILT("tilt", "Tilt", UiIcon.TILT),
     // Keep the stored ID so existing Monoline size/dynamics preferences survive.
     MONOLINE("monoline", "Marker", UiIcon.MARKER, 128f),
-    ERASER("eraser", "Eraser", UiIcon.ERASER, 128f);
+    ERASER("eraser", "Eraser", UiIcon.ERASER, 128f),
+    LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE);
 
     fun defaults() = BrushSettings(id, size = if (this == MONOLINE || this == ERASER) 32f else 12f,
-        pressure = this == INK || this == TILT, tilt = this == TILT)
+        pressure = this == INK || this == TILT || this == LAB_FOUNTAIN, tilt = this == TILT)
     companion object {
+        val available get() = entries.filter { it != LAB_FOUNTAIN || BuildConfig.BOOX_LAB }
         fun fromId(id: String?) = entries.firstOrNull { it.id == id } ?: TILT
     }
 }

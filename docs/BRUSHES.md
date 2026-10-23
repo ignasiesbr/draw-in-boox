@@ -1,5 +1,13 @@
 # Brush input, tilt and live preview
 
+Lab-only Fountain trial: the optional `booxRenderer=recovered` build installs a
+separate BOOX Art Lab app. It pairs native FOUNTAIN feedback with an editable Rust
+final renderer. `booxLab=true` compares the same adapter with official binaries.
+Existing presets retain their accepted app-width PENCIL response; the new preset
+uses only vendor dynamics. Source/original final pixels differ in the current
+fixture, so matching is experimental. See RECOVERED_RENDERER_EXPERIMENT.md and
+the independent BOOX_BUILTIN_BRUSHES_FALLBACK.md before continuing this work.
+
 Alpha-lock product decision (2026-10-23): the user accepts native feedback outside
 the alpha mask during contact, corrected by the committed composite. Compatible
 black brushes already remain native with alpha lock on; do not add a native gate

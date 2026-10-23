@@ -98,7 +98,9 @@ class MainActivity : Activity() {
         surface = RasterSurface(this, strokeFinished = ::recordStroke)
         surface.configureHistoryGestures(settings.undoGestureEnabled, settings.redoGestureEnabled)
         brushStore = BrushSettingsStore(this)
-        surface.selectBrush(brushStore.load(brushStore.selected()))
+        val initialPreset = if (BuildConfig.BOOX_LAB && !getSharedPreferences("app_settings", 0).contains("brush_selected"))
+            BrushPreset.LAB_FOUNTAIN else brushStore.selected()
+        surface.selectBrush(brushStore.load(initialPreset))
         adapter = BooxPenAdapter(surface) { message ->
             status.text = message
             mode.text = if (surface.rawInput) "BOOX pen" else "Android pen"
@@ -119,7 +121,7 @@ class MainActivity : Activity() {
         surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
         surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
         val drawingTools = LinearLayout(this)
-        BrushPreset.entries.forEach { preset ->
+        BrushPreset.available.forEach { preset ->
             val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
                 tag = "brush.${preset.id}"
                 setOnClickListener {
@@ -170,7 +172,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=history-controls-v1")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=history-controls-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -326,7 +328,8 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        documentInfo.text = "BOOX Art · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND})" else "BOOX Art"
+        documentInfo.text = "$title · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
     private fun zoom(action: ZoomAction) {
@@ -406,7 +409,7 @@ class MainActivity : Activity() {
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
             .put("settingsVersion", 2).put("preview", if (source == "boox") {
-                if (captured.isEraser) "native-white-eraser" else "native-round-width"
+                if (captured.isEraser) "native-white-eraser" else if (captured.isBooxFountain) "native-fountain" else "native-round-width"
             } else "app-round-brush")
             .put("operation", if (captured.isEraser) "erase" else "paint")
             .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))

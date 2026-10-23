@@ -1,5 +1,23 @@
 # Research and handoff
 
+Current source experiment: branch `experiment/recovered-boox-native`, stable app
+checkpoint `29c7373` and separate fallback guide commit `688ac5f`. Normal app is
+`art.boox.probe`; trial is `art.boox.probe.lab`, labeled BOOX Art Lab with backend
+in its title. Trial adds Fountain Lab (wave icon). It uses firmware FOUNTAIN for
+live ink and modern NeoPenNative geometry for final pixels, with a vendored editable
+Rust renderer replacing only libneopen_jni.so. The official input reader remains:
+the recovered reader's session JNI arguments are incompatible with the pinned Java.
+
+The source renderer's 23 Rust tests, source Lab build/lint and final full device
+suite pass. The normal official app build/lint and official Lab targeted Fountain
+checks pass. Offline fixture coverage differs (official 2,487 vs source 3,671
+painted pixels); these are not matching firmware preview measurements. Physical
+feedback is still required. Final source fixture geometry took ~43ms and draw ~7ms
+on a cold 100-sample check; the total includes file writing/scans, not pen latency.
+Existing strokes recorded on Lab are separate from the user's stable drawing.
+See RECOVERED_RENDERER_EXPERIMENT.md for build/compare/rollback commands and the
+firmware boundary. BOOX_BUILTIN_BRUSHES_FALLBACK.md is the official-only escape route.
+
 Alpha-lock follow-up: user accepts native ink outside the alpha mask during input,
 corrected by the committed composite. Compatible black paint already uses native
 feedback under alpha lock; keep that behavior and the accepted 450ms reconciliation.

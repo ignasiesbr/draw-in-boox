@@ -1,5 +1,11 @@
 # BOOX Art
 
+The editable native renderer trial runs as a separate **BOOX Art Lab** app. Build
+with `dev.ps1 run -Renderer recovered` after building the Rust library. It adds a
+Fountain Lab brush; live/final matching remains experimental. See
+[experiment instructions](docs/RECOVERED_RENDERER_EXPERIMENT.md) and the independent
+[official BOOX brush fallback guide](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
+
 Undo/Redo arrow buttons are on the drawing toolbar. In Settings → History gestures,
 disable Undo (two-finger tap) and Redo (two-finger double tap) separately, then Apply.
 Toolbar actions remain available when gestures are off; choices are remembered.

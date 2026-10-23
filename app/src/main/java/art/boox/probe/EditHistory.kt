@@ -24,6 +24,11 @@ interface DocumentEdit {
 class StrokeEdit(private val samples: List<PenSample>, private val brush: PressureBrush) : DocumentEdit {
     override val label = if (brush.isEraser) "Erase" else "Stroke"
     override fun affectedRegions(spec: CanvasSpec): List<Rect> {
+        if (brush.isBooxFountain) {
+            val bounds = brush.renderedBounds(samples) ?: return emptyList()
+            return if (bounds.intersect(0f, 0f, spec.width.toFloat(), spec.height.toFloat()))
+                listOf(Rect().also { bounds.roundOut(it) }) else emptyList()
+        }
         val padding = brush.maxRenderedWidth / 2f + 2f
         var previous = samples.firstOrNull() ?: return emptyList()
         return samples.mapNotNull { point ->

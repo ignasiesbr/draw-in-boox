@@ -1,5 +1,9 @@
 plugins { id("com.android.application") }
 
+val rendererBackend = providers.gradleProperty("booxRenderer").orElse("official").get()
+require(rendererBackend in setOf("official", "recovered")) { "booxRenderer must be official or recovered" }
+val labBuild = rendererBackend == "recovered" || providers.gradleProperty("booxLab").orNull == "true"
+
 android {
     namespace = "art.boox.probe"
     compileSdk = 37
@@ -9,12 +13,21 @@ android {
         targetSdk = 32
         versionCode = 1
         versionName = "0.1-probe"
+        if (labBuild) applicationIdSuffix = ".lab"
+        manifestPlaceholders["appLabel"] = if (labBuild) "BOOX Art Lab ($rendererBackend)" else "BOOX Art Probe"
+        buildConfigField("boolean", "BOOX_LAB", labBuild.toString())
+        buildConfigField("String", "RENDERER_BACKEND", "\"$rendererBackend\"")
         testInstrumentationRunner = "art.boox.probe.RasterInstrumentation"
         ndk { abiFilters += "arm64-v8a" }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures { buildConfig = true }
+    if (rendererBackend == "recovered") {
+        sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/recovered-renderer/jni"))
+        sourceSets.getByName("main").assets.srcDir(rootProject.file(".tools/recovered-renderer/assets"))
     }
     packaging { jniLibs.pickFirsts += "**/libc++_shared.so" }
     lint {
@@ -24,7 +37,14 @@ android {
 }
 
 dependencies {
-    implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.4.4")
+    implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.4.4") {
+        if (rendererBackend == "recovered") exclude(group = "com.onyx.android.sdk", module = "onyxsdk-pennative")
+    }
+    if (rendererBackend == "recovered") {
+        val originalBindings = rootProject.file(".tools/recovered-renderer/pennative-bindings.jar")
+        require(originalBindings.isFile) { "Run scripts/build-recovered-renderer.ps1 before building the recovered renderer." }
+        implementation(files(originalBindings))
+    }
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
     // BOOX brings early AndroidX releases whose manifests share a namespace.
     implementation("androidx.vectordrawable:vectordrawable:1.2.0")

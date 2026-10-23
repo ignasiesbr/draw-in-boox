@@ -13,14 +13,24 @@ import java.io.File
 class RasterInstrumentation : Instrumentation() {
     private var performanceOnly = false
     private var asyncOnly = false
+    private var fountainOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
+        fountainOnly = arguments?.getString("fountainOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (fountainOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { BooxFountainChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: fountain renderer checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (asyncOnly) {
                 AsyncSurfaceChecks.run(this)
                 result.putString("stream", "PASS: background surface checks\n")
@@ -90,6 +100,7 @@ class RasterInstrumentation : Instrumentation() {
                     EraserChecks.run(targetContext)
                     NativePreviewSafetyChecks.run(targetContext)
                     NativeEraserChecks.run()
+                    BooxFountainChecks.run(targetContext)
                     DirtyFrameChecks.run(targetContext)
                     StrokePresentationChecks.run(targetContext)
                 } finally { file.delete() }

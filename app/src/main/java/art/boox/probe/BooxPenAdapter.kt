@@ -62,6 +62,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             if (!view.rawInput) { close(); status("BOOX did not enable input. Android pen mode.") }
             else status(when {
                 view.brush.isEraser -> "BOOX eraser · experimental white preview"
+                view.brush.isBooxFountain -> "BOOX Fountain Lab · compare live and final stroke"
                 view.document?.activeLayer?.alphaLocked == true -> "BOOX pen · alpha lock applied to committed ink"
                 else -> "BOOX pen ready · pressure controls width"
             })
@@ -114,10 +115,10 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         NativePreviewConfiguration.apply(width, color,
             rendering = { target.setRawDrawingRenderEnabled(it) },
             setColor = { target.setStrokeColor(it) }, setWidth = { target.setStrokeWidth(it) },
-            setPencil = { target.setStrokeStyle(TouchHelper.STROKE_STYLE_PENCIL) },
+            setPencil = { target.setStrokeStyle(if (view.brush.isBooxFountain) TouchHelper.STROKE_STYLE_FOUNTAIN else TouchHelper.STROKE_STYLE_PENCIL) },
             enableInput = { target.setRawInputReaderEnable(true) })
         StrokePerformance.log("nativeResume handoff=$handoff configuredWhilePaused=true totalMs=${StrokePerformance.ms(started)}")
-        Log.d("BooxProbe", "Hardware preview: app-width pencil baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
+        Log.d("BooxProbe", "Hardware preview: style=${if (view.brush.isBooxFountain) "fountain" else "pencil"} baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
     }
 
     private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {

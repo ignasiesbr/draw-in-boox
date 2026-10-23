@@ -33,9 +33,10 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     val widthModifier: StrokeWidthModifier = TiltWidthModifier(),
     val settings: BrushSettings? = null) {
     val isEraser = settings?.preset == BrushPreset.ERASER
+    val isBooxFountain = settings?.preset == BrushPreset.LAB_FOUNTAIN
     private val roundMarker = isEraser || (settings?.preset == BrushPreset.MONOLINE &&
         !settings.pressure && !settings.tilt)
-    val engineId = if (isEraser) "round-eraser" else if (roundMarker) "round-marker" else "continuous-round"
+    val engineId = if (isBooxFountain) "boox-fountain-${BuildConfig.RENDERER_BACKEND}" else if (isEraser) "round-eraser" else if (roundMarker) "round-marker" else "continuous-round"
     val engineVersion = 1
     val inkColor: Int = settings?.shade?.argb ?: Color.BLACK
     init { require(minWidth.isFinite() && maxWidth.isFinite() && minWidth > 0 && maxWidth >= minWidth)
@@ -46,12 +47,16 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     private val alphaLockMode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
     private val eraseMode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     private val path = Path()
+    private val fountain by lazy { BooxFountainGeometry(maxWidth, inkColor) }
+
+    fun renderedBounds(samples: List<PenSample>) = if (isBooxFountain) fountain.bounds(samples)
+        else StrokeDirtyBounds.document(samples, maxRenderedWidth)
 
     fun width(pressure: Float): Float = minWidth + (maxWidth - minWidth) *
         (if (pressure.isFinite()) pressure.coerceIn(0f, 1f) else 0f)
 
     val maxRenderedWidth: Float get() = maxWidth * widthModifier.maxMultiplier
-    val hasDynamicWidth: Boolean get() = minWidth != maxWidth || widthModifier.maxMultiplier != 1f
+    val hasDynamicWidth: Boolean get() = !isBooxFountain && (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
     fun width(sample: PenSample): Float = width(sample.pressure) *
         widthModifier.multiplier(sample).let { if (it.isFinite()) it.coerceIn(1f, widthModifier.maxMultiplier) else 1f }
 
@@ -59,6 +64,7 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
         if (samples.isEmpty() || (isEraser && alphaLocked)) return
         paint.xfermode = if (isEraser) eraseMode else if (alphaLocked) alphaLockMode else null
         try {
+            if (isBooxFountain) { fountain.draw(canvas, paint, samples); return }
             if (roundMarker) {
                 val first = samples.first()
                 path.rewind(); path.moveTo(first.x, first.y)

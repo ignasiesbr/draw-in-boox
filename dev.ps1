@@ -1,20 +1,29 @@
 param(
     [ValidateSet('doctor', 'build', 'run', 'capture', 'test')][string]$Command = 'doctor',
     [string]$Serial,
-    [string]$Sdk = "$env:LOCALAPPDATA\Android\Sdk"
+    [string]$Sdk = "$env:LOCALAPPDATA\Android\Sdk",
+    [ValidateSet('official', 'recovered')][string]$Renderer = 'official',
+    [switch]$Lab,
+    [switch]$FountainOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $adbPath = Join-Path $Sdk 'platform-tools\adb.exe'
 if (-not (Test-Path $adbPath)) { throw "ADB not found: $adbPath. Supply -Sdk." }
 if (-not $env:JAVA_HOME) { $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr' }
+$variantArgs = @("-PbooxRenderer=$Renderer")
+$applicationPackage = 'art.boox.probe'
+if ($Lab -or $Renderer -eq 'recovered') {
+    $variantArgs += '-PbooxLab=true'
+    $applicationPackage += '.lab'
+}
 
 function Invoke-Adb {
     & $adbPath @script:deviceArgs @args
     if ($LASTEXITCODE -ne 0) { throw "ADB failed ($LASTEXITCODE): $args" }
 }
 function Invoke-Build {
-    & "$PSScriptRoot\gradlew.bat" @args
+    & "$PSScriptRoot\gradlew.bat" @script:variantArgs @args
     if ($LASTEXITCODE -ne 0) { throw "Gradle failed ($LASTEXITCODE)" }
 }
 $deviceArgs = @()
@@ -37,7 +46,7 @@ if (-not $Serial) {
 }
 $deviceArgs = @('-s', $Serial)
 if ($Command -in @('run', 'test')) {
-    $runningApp = & $adbPath @deviceArgs shell pidof art.boox.probe
+    $runningApp = & $adbPath @deviceArgs shell pidof $applicationPackage
     if ($LASTEXITCODE -eq 0 -and $runningApp) {
         # Package replacement can kill the process without onPause. Visit Home first so it saves.
         Invoke-Adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME
@@ -47,8 +56,8 @@ switch ($Command) {
     'run' {
         Invoke-Build :app:assembleDebug
         Invoke-Adb install -r app/build/outputs/apk/debug/app-debug.apk
-        Invoke-Adb shell pm enable --user 0 art.boox.probe
-        $launch = Invoke-Adb shell am start -W -n art.boox.probe/.MainActivity
+        Invoke-Adb shell pm enable --user 0 $applicationPackage
+        $launch = Invoke-Adb shell am start -W -n "$applicationPackage/art.boox.probe.MainActivity"
         $launch
         if (($launch -join "`n") -match 'Error:|Error type') { throw 'App launch failed; inspect device package state.' }
     }
@@ -56,10 +65,16 @@ switch ($Command) {
         Invoke-Build :app:assembleDebug :app:assembleDebugAndroidTest
         Invoke-Adb install -r app/build/outputs/apk/debug/app-debug.apk
         Invoke-Adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-        Invoke-Adb shell pm enable --user 0 art.boox.probe
-        $output = Invoke-Adb shell am instrument -w art.boox.probe.test/art.boox.probe.RasterInstrumentation
+        Invoke-Adb shell pm enable --user 0 $applicationPackage
+        $instrumentArgs = @('-w')
+        if ($FountainOnly) {
+            if (!($Lab -or $Renderer -eq 'recovered')) { throw '-FountainOnly requires -Lab or -Renderer recovered.' }
+            $instrumentArgs += @('-e', 'fountainOnly', 'true')
+        }
+        $output = Invoke-Adb shell am instrument @instrumentArgs "$applicationPackage.test/art.boox.probe.RasterInstrumentation"
         $output
-        if (($output -join "`n") -notmatch 'PASS: bitmap') { throw 'Device checks failed' }
+        $expected = if ($FountainOnly) { 'PASS: fountain renderer checks' } else { 'PASS: bitmap' }
+        if (($output -join "`n") -notmatch $expected) { throw 'Device checks failed' }
     }
     'capture' {
         $destination = Join-Path $PSScriptRoot ('captures\' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
@@ -68,8 +83,8 @@ switch ($Command) {
         Invoke-Adb pull /sdcard/boox-art-capture.png "$destination\screen.png"
         Invoke-Adb shell rm /sdcard/boox-art-capture.png
         Invoke-Adb logcat -d -s BooxProbe BooxPerf AndroidRuntime | Set-Content "$destination\logcat.txt"
-        Invoke-Adb shell run-as art.boox.probe cat files/strokes.jsonl | Set-Content "$destination\strokes.jsonl"
-        Invoke-Adb shell run-as art.boox.probe cat files/document-state.json | Set-Content "$destination\document-state.json"
+        Invoke-Adb shell run-as $applicationPackage cat files/strokes.jsonl | Set-Content "$destination\strokes.jsonl"
+        Invoke-Adb shell run-as $applicationPackage cat files/document-state.json | Set-Content "$destination\document-state.json"
         foreach ($property in @('ro.product.model', 'ro.build.version.sdk', 'ro.build.display.id')) {
             "$property=$(Invoke-Adb shell getprop $property)" | Add-Content "$destination\device.txt"
         }
