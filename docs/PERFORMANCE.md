@@ -1,5 +1,11 @@
 # Stroke responsiveness investigation
 
+Recovered-renderer Lab follow-up: user tested `f4bde6c` Fountain Lab and reported
+"its good". Its fast live feedback still comes from BOOX firmware FOUNTAIN, while
+the editable Rust renderer supplies final geometry. This feedback supports that
+combined trial; it does not measure end-to-end latency or establish that Rust alone
+provides the hardware preview. See RECOVERED_RENDERER_EXPERIMENT.md for boundaries.
+
 Current revision: `penPipeline=native-eraser-v1` (retains `shader-safe-v2` input setup).
 Baseline is committed as `388add9`. The user requested a native eraser trial:
 white feedback is limited to <=30 document/screen px, one full-opacity unlocked

@@ -1,5 +1,10 @@
 # Editable BOOX native renderer trial
 
+User physical feedback after trying commit `f4bde6c`: "its good". This is positive
+validation of the Fountain trial's feel/result at the tested configuration. Exact
+native/raster pixel equivalence, other native types, and arbitrary custom live
+brush rendering remain unverified. Preserve this behavior when extending the trial.
+
 2026-10-23. Branch `experiment/recovered-boox-native`. Working app checkpoint:
 `29c7373`; saved APK `.tools/baselines/29c7373/app-debug.apk`. The independent
 official-SDK fallback guide is `BOOX_BUILTIN_BRUSHES_FALLBACK.md` (commit `688ac5f`).

@@ -1,5 +1,12 @@
 # Research and handoff
 
+Physical feedback on `f4bde6c`: user tested the recovered Fountain Lab and said
+"its good". Treat this as positive feedback for that trial/configuration, not proof
+of exact firmware/raster equivalence or acceptance of every source brush family.
+User now wants to expand the self-built renderer. Preserve its working Fountain
+integration and native responsiveness while adding per-family adapters. Be explicit:
+Rust controls app-side geometry; BOOX firmware still controls fast live ink.
+
 Current source experiment: branch `experiment/recovered-boox-native`, stable app
 checkpoint `29c7373` and separate fallback guide commit `688ac5f`. Normal app is
 `art.boox.probe`; trial is `art.boox.probe.lab`, labeled BOOX Art Lab with backend
