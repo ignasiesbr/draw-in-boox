@@ -9,6 +9,11 @@ preview differed visibly from final graphite; existing tools retain app-width
 PENCIL. Never apply a second app width curve to vendor-dynamic families. See
 [docs/BRUSH_ENGINE.md](docs/BRUSH_ENGINE.md) for source-only Pencil/Charcoal, tilt,
 cached alpha masks, JNI batching, native approximation limits and validation.
+Dry raster v2 batches 128 textured dabs through a padded alpha atlas. Keep its
+fixed scratch budget and reference fallback for tiny tips/hardware UI canvases.
+Idle native close preserves an acknowledged screen cache; actual pending frames
+and view/surface changes must still invalidate it. Upright cache seeds copy only
+visible document pixels; rotated full-document fallback is intentional.
 The official-SDK alternative is documented separately in
 [docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
 

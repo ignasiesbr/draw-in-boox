@@ -24,13 +24,13 @@ object AsyncSurfaceChecks {
             instrumentation.runOnMainSync { try { work() } catch (error: Throwable) { failure = error } }
             failure?.let { throw it }
         }
-        fun paint(bounds: RectF): Double {
+        fun paint(bounds: RectF, cropVisible: Boolean = true): Double {
             val done = CountDownLatch(1)
             var success = false
             var preparationMs = 0.0
             onMain {
                 val start = StrokePerformance.now()
-                surface.renderAsync(bounds) { success = it; done.countDown() }
+                surface.renderAsync(bounds, cropVisible) { success = it; done.countDown() }
                 preparationMs = StrokePerformance.ms(start)
                 // A normal UI task must run while the worker owns surface presentation.
                 surface.post { check(Looper.myLooper() == Looper.getMainLooper()) }
@@ -157,6 +157,54 @@ object AsyncSurfaceChecks {
                     } finally { asynchronous.recycle() }
                 }
             }
+            // A zoomed/panned large document seeds from visible source pixels only.
+            // Compare initial crop and later patch with the prior uncropped worker path.
+            // This holds rotated screen-conversion rounding constant for the dense grid;
+            // the earlier sparse fixtures separately compare against the synchronous painter.
+            for (angle in listOf(0f, 37f)) {
+                onMain {
+                    surface.createDocument(CanvasSpec(1860, 2480)); surface.rotateView(angle)
+                    surface.zoom(ZoomAction.ACTUAL); surface.selectBrush(BrushPreset.INK.defaults())
+                    val canvas = android.graphics.Canvas(surface.document!!.layer)
+                    val ink = android.graphics.Paint()
+                    for (y in 0 until 2480 step 97) for (x in 0 until 1860 step 101) {
+                        ink.color = if ((x / 101 + y / 97) % 2 == 0) InkShade.DEEP.argb else InkShade.LIGHT.argb
+                        canvas.drawRect(x.toFloat(), y.toFloat(), x + 70f, y + 61f, ink)
+                    }
+                    surface.render()
+                }
+                val fullDocumentTime = paint(RectF(0f, 0f, 1860f, 2480f), cropVisible = false)
+                val reference = copySurface()
+                onMain { surface.render() }
+                val seedTime = paint(RectF(0f, 0f, 1860f, 2480f))
+                val cropped = copySurface()
+                try { check(equivalent(cropped, reference)) { "Visible document crop changed pixels angle=$angle" } }
+                finally { reference.recycle(); cropped.recycle() }
+                val seed = checkNotNull(surface.lastSnapshotMetrics)
+                check(seed.full)
+                if (angle == 0f) check(seed.pixels < 1860L * 2480 / 2) { "Full seed copied offscreen document pixels" }
+                lateinit var strokeBounds: RectF
+                onMain {
+                    // Closing an idle native session must preserve its acknowledged cache.
+                    check(!surface.cancelAsyncPresentation())
+                    val center = surface.viewport.transform.toDocument(surface.width / 2f, surface.height / 2f)
+                    strokeBounds = checkNotNull(surface.commit(listOf(PenSample(center.x - 15f, center.y, 0.5f, 0),
+                        PenSample(center.x + 15f, center.y + 20f, 1f, 1)), "crop-test", deferPresentation = true))
+                }
+                val patchTime = paint(strokeBounds)
+                val patch = checkNotNull(surface.lastSnapshotMetrics)
+                if (angle == 0f) check(!patch.full && patch.pixels < seed.pixels / 4) { "Idle close forced a full canvas snapshot" }
+                val patched = copySurface()
+                try {
+                    onMain { surface.render() }
+                    paint(RectF(0f, 0f, 1860f, 2480f), cropVisible = false)
+                    val committed = copySurface()
+                    try { check(equivalent(patched, committed)) { "Cropped cache lost pixels outside a stroke patch" } }
+                    finally { committed.recycle() }
+                } finally { patched.recycle() }
+                android.util.Log.i("BooxPerf", "visibleSnapshotBenchmark angle=$angle documentPixels=4612800 seedPixels=${seed.pixels} patchPixels=${patch.pixels} oldSeedUiMs=$fullDocumentTime seedUiMs=$seedTime patchUiMs=$patchTime")
+            }
+            onMain { surface.createDocument(CanvasSpec(260, 260)); surface.zoom(ZoomAction.ACTUAL) }
             // Multiple queued requests must preserve all changed regions in the latest frame.
             onMain { surface.rotateView(0f) }
             paint(RectF(0f, 0f, 260f, 260f))

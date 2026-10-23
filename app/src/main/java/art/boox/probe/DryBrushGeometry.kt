@@ -18,10 +18,21 @@ internal class DryBrushGeometry(private val size: Float, private val family: Boo
     private var cachedLast: PenSample? = null
     private var data = FloatArray(0)
     private var bounds: RectF? = null
+    private val batch by lazy { DryBrushBatch(family) }
+
+    private fun drawBatched(canvas: Canvas, paint: Paint, samples: List<PenSample>) {
+        prepare(samples); batch.draw(canvas, paint, data)
+    }
 
     fun bounds(samples: List<PenSample>): RectF? { prepare(samples); return bounds?.let(::RectF) }
 
     fun draw(canvas: Canvas, paint: Paint, samples: List<PenSample>) {
+        // Keep subpixel tip coverage and the settings dialog's hardware path.
+        if (size < 4f || canvas.isHardwareAccelerated) drawReference(canvas, paint, samples)
+        else drawBatched(canvas, paint, samples)
+    }
+
+    internal fun drawReference(canvas: Canvas, paint: Paint, samples: List<PenSample>) {
         prepare(samples)
         val tips = DryBrushTips.forFamily(family)
         val oldAlpha = paint.alpha; val oldFiltering = paint.isFilterBitmap
@@ -110,22 +121,36 @@ internal class DryBrushGeometry(private val size: Float, private val family: Boo
 
 /** Four shared, bounded masks; colors and sizes reuse these resources. Deterministic grain. */
 internal object DryBrushTips {
+    private data class Resources(val tips: Array<Bitmap>, val atlas: Bitmap)
     private class Masks(private val coarse: Boolean) {
         private val started = java.util.concurrent.atomic.AtomicBoolean()
-        private val task = java.util.concurrent.FutureTask { generate(coarse) }
+        private val task = java.util.concurrent.FutureTask {
+            val tips = generate(coarse)
+            val atlas = ByteArray(272 * 68)
+            for (variant in tips.indices) {
+                val pixels = ByteArray(4096)
+                tips[variant].copyPixelsToBuffer(java.nio.ByteBuffer.wrap(pixels))
+                for (y in 0 until 68) for (x in 0 until 68)
+                    atlas[y * 272 + variant * 68 + x] = pixels[(y - 2).coerceIn(0, 63) * 64 + (x - 2).coerceIn(0, 63)]
+            }
+            Resources(tips, Bitmap.createBitmap(272, 68, Bitmap.Config.ALPHA_8).apply {
+                copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(atlas))
+            })
+        }
         fun start() {
             if (started.compareAndSet(false, true)) Thread({
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
                 task.run()
             }, "BrushTips").start()
         }
-        fun get(): Array<Bitmap> { start(); return task.get() }
+        fun get(): Resources { start(); return task.get() }
     }
     private val pencil = Masks(false)
     private val charcoal = Masks(true)
     private fun masks(family: BooxBrushFamily) = if (family == BooxBrushFamily.CHARCOAL) charcoal else pencil
     fun preload(family: BooxBrushFamily) = masks(family).start()
-    fun forFamily(family: BooxBrushFamily) = masks(family).get()
+    fun forFamily(family: BooxBrushFamily) = masks(family).get().tips
+    fun atlas(family: BooxBrushFamily) = masks(family).get().atlas
 
     private fun generate(coarse: Boolean): Array<Bitmap> = Array(4) { variant ->
         val side = 64

@@ -1,5 +1,65 @@
 # Stroke responsiveness investigation
 
+## Brush performance follow-up (`brush-perf-v1`)
+
+Checkpoint before optimization: `663eb14` (Pencil textured-preview trial). The user's
+physical capture `captures/20261023-212120` showed normal upright strokes already
+using partial surface patches, but the first stroke after a tool/cache reset copied
+the entire 1860x2480 document (4.61M pixels, ~22–24ms UI preparation). Charcoal also
+spent 61–114ms rasterizing 379/827-sample strokes on UI; surface work alone did not
+explain the slow commits. Native feedback still ran while surface handoff waited
+for the accepted 450ms quiet gap.
+
+Three changes reduce that work:
+
+- Closing/reopening an idle native reader no longer invalidates an acknowledged
+  screen cache. Outstanding asynchronous work still invalidates; view changes,
+  synchronous replacement, surface destruction and lifecycle flushing keep their
+  existing guards. This avoids forcing a full seed on a tool change alone.
+- Necessary upright cache seeds copy only the visible integer document region,
+  with two source pixels of filter padding and a matching translated transform.
+  Rotated snapshots keep the full-document fallback. Workers still receive
+  immutable pixels only, and preserve their full screen buffer for expanded surface
+  locks. `asyncSnapshot` now logs the reason, source rectangle and pixel counts.
+- Dry raster v2 submits 128 textured dabs at a time through a padded ALPHA_8 atlas
+  and reusable ~15KiB vertex/texture/color arrays. No per-dab bitmap or vertex array
+  allocations. Tip geometry, spacing, grain masks, dynamics and per-stroke history
+  remain the same. Fine tips below 4px and hardware UI canvases use the reference
+  bitmap path. The worker never gains access to mutable layer pixels.
+
+Matched-device comparison, same 1,000-sample changing-angle geometry, three warm
+measurements after one warmup: Pencil reference ~41–43ms versus batched ~17ms;
+Charcoal ~42–44ms versus ~17–18ms. These are raster CPU times, about 2.5x faster,
+not physical pen latency. Standard dry-brush benchmark with separate geometry
+preparation measured ~20ms raster, previously ~58–60ms in the earlier run.
+
+Attached-surface comparison on a 1860x2480 document: seed source reduced from
+4,612,800 to 1,227,600 pixels (~73% fewer); matched UI preparation was 18.25ms
+uncropped versus 5.76ms cropped. After idle close, the next test stroke copied a
+2,000-pixel patch instead of seeding again. Single-run timings include allocation
+and scheduling noise; source areas and pixel comparisons are the stronger evidence.
+Rotated source remains 4.61M pixels and is an explicit remaining cost.
+
+The triangle path introduces small raster rounding/edge differences; it is not
+pixel-identical to the old bitmap path. Measured maximum visible difference in
+the 1,000-sample comparisons was 14/255 (normal transparency), 6/255 under alpha
+lock. Fidelity checks bound visible premultiplied ink on black and white to 18/255
+and mean <4/255 in the long trace, and test dots, abrupt dynamics, gray and sizes
+1/4/32/64/128. Locked alpha must remain exactly unchanged across all 256 levels.
+Engine version is 2 for dry brushes; old raster artwork is never reinterpreted.
+
+Async checks compare visible seeds and patches against the prior uncropped worker
+path using a dense patterned document, plus the existing synchronous comparisons,
+queued disjoint updates, cancellation, gray pre-lift feedback and eraser layering.
+Native setup, async handoff and the <=30px/black crash guard are unchanged. Physical
+ordinary-fast/burst input and the textured Pencil preview still need user feedback.
+Recovered build/lint and the full Go103 suite pass, including the batching fidelity
+checks and surface comparisons. The first crop-suite attempt hit the existing
+layer-layout timeout while the tablet was not awake; awake targeted and final full
+runs passed. No native gray/wide path was re-enabled.
+
+Earlier investigation entries below are historical.
+
 Brush-engine follow-up: Pencil/Charcoal keep native black/narrow input and the
 accepted handoff; actual app previews use cached distance-spaced Rust geometry.
 Shared alpha-only masks prepare in background, and JNI input is batched. The warm

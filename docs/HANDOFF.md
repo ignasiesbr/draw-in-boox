@@ -1,5 +1,18 @@
 # Research and handoff
 
+Performance follow-up after checkpoint `663eb14`: header/log `brush perf v1` /
+`brush-perf-v1`. Upright full cache seeds copy visible document pixels only; idle
+native close preserves an acknowledged cache. Pending frames and actual view/
+surface mutations still invalidate, and rotation retains the full-doc fallback.
+Dry raster v2 batches 128 dabs with a shared padded alpha atlas and fixed arrays;
+default brush raster measured ~2.5x faster versus the reference in matched tests.
+Small raster rounding differs; alpha lock must remain exact. Geometry and native
+input/450ms/background handoff stay intact. See PERFORMANCE.md for measurements,
+test conditions, crop equivalence and explicit native/rotated limitations.
+Recovered build/lint and the full awake Go103 suite pass for this follow-up,
+including batching fidelity, all alpha-lock levels, native setup, source crop/patch
+equivalence and actual gray Pencil/Charcoal pre-lift previews.
+
 Physical brush feedback: Charcoal works okay on `82b773c`; Pencil native preview
 differs from final graphite. Capture 20261023-212120 records that session. Pencil
 preview v2 trials native CHARCOAL_V2 instead of the solid PENCIL proxy, with no

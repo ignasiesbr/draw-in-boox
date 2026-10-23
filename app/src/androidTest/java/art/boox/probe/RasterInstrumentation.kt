@@ -15,16 +15,26 @@ class RasterInstrumentation : Instrumentation() {
     private var asyncOnly = false
     private var fountainOnly = false
     private var brushesOnly = false
+    private var dryBatchOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
         fountainOnly = arguments?.getString("fountainOnly") == "true"
         brushesOnly = arguments?.getString("brushesOnly") == "true"
+        dryBatchOnly = arguments?.getString("dryBatchOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (dryBatchOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { DryBrushBatchChecks.run() } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: dry brush batching checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (brushesOnly) {
                 var failure: Throwable? = null
                 runOnMainSync { try { BooxBrushChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
@@ -112,6 +122,7 @@ class RasterInstrumentation : Instrumentation() {
                     NativeEraserChecks.run()
                     BooxFountainChecks.run(targetContext)
                     BooxBrushChecks.run(targetContext)
+                    DryBrushBatchChecks.run()
                     DirtyFrameChecks.run(targetContext)
                     StrokePresentationChecks.run(targetContext)
                 } finally { file.delete() }

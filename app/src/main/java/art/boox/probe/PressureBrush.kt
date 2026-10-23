@@ -40,7 +40,7 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     private val roundMarker = isEraser || (settings?.preset == BrushPreset.MONOLINE &&
         !settings.pressure && !settings.tilt)
     val engineId = if (usesBooxEngine) "boox-${booxFamily!!.label.lowercase()}-${BuildConfig.RENDERER_BACKEND}" else if (isEraser) "round-eraser" else if (roundMarker) "round-marker" else "continuous-round"
-    val engineVersion = 1
+    val engineVersion = if (booxFamily?.dry == true) 2 else 1
     val inkColor: Int = settings?.shade?.argb ?: Color.BLACK
     init { require(minWidth.isFinite() && maxWidth.isFinite() && minWidth > 0 && maxWidth >= minWidth)
         require(widthModifier.maxMultiplier.isFinite() && widthModifier.maxMultiplier >= 1f)

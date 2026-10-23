@@ -5,6 +5,19 @@ import android.graphics.RectF
 
 /** Conservative stroke footprint; viewport changes still require a full frame. */
 object StrokeDirtyBounds {
+    /** Integer source pixels needed to reproduce the viewport, including filter taps.
+     * Used for full worker-cache seeds, not partial rotated surface painting. */
+    fun visibleDocument(spec: CanvasSpec, transform: ViewTransform, width: Int, height: Int): Rect {
+        val corners = arrayOf(transform.toDocument(0f, 0f), transform.toDocument(width.toFloat(), 0f),
+            transform.toDocument(0f, height.toFloat()), transform.toDocument(width.toFloat(), height.toFloat()))
+        val bounds = RectF(corners.minOf { it.x }, corners.minOf { it.y },
+            corners.maxOf { it.x }, corners.maxOf { it.y })
+        bounds.inset(-2f, -2f)
+        val region = Rect().also { bounds.roundOut(it) }
+        if (!region.intersect(0, 0, spec.width, spec.height)) region.setEmpty()
+        return region
+    }
+
     fun document(samples: List<PenSample>, maximumWidth: Float): RectF? {
         if (samples.isEmpty()) return null
         var left = Float.POSITIVE_INFINITY; var top = left

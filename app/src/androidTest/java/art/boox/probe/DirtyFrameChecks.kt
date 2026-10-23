@@ -87,6 +87,12 @@ object DirtyFrameChecks {
     }
 
     fun run(context: Context) {
+        val spec = CanvasSpec(1860, 2480)
+        check(StrokeDirtyBounds.visibleDocument(spec, ViewTransform(2f, -200f, -400f), 400, 400) ==
+            android.graphics.Rect(98, 198, 302, 402))
+        check(StrokeDirtyBounds.visibleDocument(spec, ViewTransform(2f, 0f, 0f), 400, 400) ==
+            android.graphics.Rect(0, 0, 202, 202))
+        check(StrokeDirtyBounds.visibleDocument(spec, ViewTransform(1f, 10000f, 10000f), 400, 400).isEmpty)
         val isolated = object : ContextWrapper(context) {
             override fun getFilesDir() = File(context.cacheDir, "dirty-frame-tests").apply { mkdirs() }
         }

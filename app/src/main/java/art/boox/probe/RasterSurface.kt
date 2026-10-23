@@ -50,6 +50,9 @@ class RasterSurface(
     private var asyncCacheEpoch = -1L
     private var asyncSequence = 0L
     private var asyncDirty: Rect? = null
+    internal data class SnapshotMetrics(val full: Boolean, val pixels: Long, val reason: String)
+    internal var lastSnapshotMetrics: SnapshotMetrics? = null
+        private set
     private var loadFailed = false
     var inputEnabled = true
         set(value) { field = value; if (!value) { historyTaps.cancel(); gestures.cancel(); cancelStroke() } }
@@ -325,17 +328,20 @@ class RasterSurface(
 
     internal fun cancelAsyncPresentation(): Boolean {
         val pending = asyncDirty != null
-        invalidateAsyncFrames()
+        // Closing/reopening an idle native reader does not change surface pixels.
+        // Keep a valid worker cache; real view/surface mutations still invalidate it.
+        if (pending) invalidateAsyncFrames()
         return pending
     }
 
     /** Snapshot only pixels on UI; SurfaceHolder lock/draw/post run on a worker.
      * A full snapshot seeds the screen cache after any synchronous frame/view change. */
-    internal fun renderAsync(dirtyDocument: RectF, complete: (Boolean) -> Unit) {
+    internal fun renderAsync(dirtyDocument: RectF, cropVisible: Boolean = true, complete: (Boolean) -> Unit) {
         if (!holder.surface.isValid || width <= 0 || height <= 0) { complete(false); return }
         val started = StrokePerformance.now()
         val epoch = frameEpoch
-        val dirty = if (asyncCacheEpoch != epoch) Rect(0, 0, width, height)
+        val needsSeed = asyncCacheEpoch != epoch
+        val dirty = if (needsSeed) Rect(0, 0, width, height)
             else StrokeDirtyBounds.view(dirtyDocument, viewport.transform, width, height)
         if (dirty.isEmpty) { complete(true); return }
         asyncDirty?.let { dirty.union(it) }
@@ -343,8 +349,13 @@ class RasterSurface(
         val sequence = ++asyncSequence
         val current = document ?: run { complete(false); return }
         val fullSnapshot = dirty == Rect(0, 0, width, height)
-        val snapshotWidth = if (fullSnapshot) current.spec.width else dirty.width()
-        val snapshotHeight = if (fullSnapshot) current.spec.height else dirty.height()
+        val transform = viewport.transform
+        val source = if (!fullSnapshot) null else if (!cropVisible || transform.rotationDegrees != 0f)
+            Rect(0, 0, current.spec.width, current.spec.height)
+        else StrokeDirtyBounds.visibleDocument(current.spec, transform, width, height)
+            .takeUnless { it.isEmpty } ?: Rect(0, 0, current.spec.width, current.spec.height)
+        val snapshotWidth = source?.width() ?: dirty.width()
+        val snapshotHeight = source?.height() ?: dirty.height()
         val available = Runtime.getRuntime().let { it.maxMemory() - it.totalMemory() + it.freeMemory() }
         val snapshotBytes = snapshotWidth.toLong() * snapshotHeight * 4
         if (available < snapshotBytes * 2 + width.toLong() * height * 4 + 8L * 1024 * 1024) {
@@ -355,18 +366,26 @@ class RasterSurface(
             catch (_: OutOfMemoryError) { render(dirtyDocument); complete(true); return }
         try {
             val target = Canvas(pixels)
-            if (fullSnapshot) drawDocument(target, current)
+            if (source != null) {
+                target.translate(-source.left.toFloat(), -source.top.toFloat())
+                drawDocument(target, current)
+            }
             else {
                 target.translate(-dirty.left.toFloat(), -dirty.top.toFloat())
                 target.clipRect(dirty)
                 drawFrame(target)
             }
         } catch (error: Throwable) { pixels.recycle(); throw error }
-        StrokePerformance.log("asyncSnapshot full=$fullSnapshot pixels=${pixels.width.toLong() * pixels.height} uiMs=${StrokePerformance.ms(started)}")
+        val reason = if (needsSeed) "cache-seed" else if (transform.rotationDegrees != 0f) "rotated" else "dirty-region"
+        lastSnapshotMetrics = SnapshotMetrics(fullSnapshot, pixels.width.toLong() * pixels.height, reason)
+        StrokePerformance.log("asyncSnapshot full=$fullSnapshot reason=$reason pixels=${lastSnapshotMetrics!!.pixels} documentPixels=${current.spec.width.toLong() * current.spec.height} source=$source uiMs=${StrokePerformance.ms(started)}")
         val painter = asyncPainter ?: AsyncSurfacePresentation(holder, surfacePaintLock,
             valid = { it == frameEpoch }, uiPost = { post(it) }).also { asyncPainter = it }
         painter.submit(AsyncSurfacePresentation.Frame(pixels, dirty, width, height, epoch,
-            documentTransform = if (fullSnapshot) viewport.transform else null, complete = { success ->
+            documentTransform = source?.let {
+                val origin = transform.toView(it.left.toFloat(), it.top.toFloat())
+                transform.copy(x = origin.x, y = origin.y)
+            }, complete = { success ->
             if (epoch != frameEpoch || sequence != asyncSequence) { complete(false) }
             else {
                 if (success) { asyncCacheEpoch = epoch; asyncDirty = null }

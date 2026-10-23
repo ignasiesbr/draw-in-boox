@@ -7,6 +7,14 @@ immediate history, immutable snapshots and background presentation remain intact
 Native black feedback is an approximation until physically compared for each tool.
 Do not widen the <=30px declared-footprint policy or send gray to native rendering.
 
+Current build `brush perf v1` retains the Pencil textured-preview trial described
+below and adds dry raster engine v2: padded texture atlas, 128-dab submissions and
+fixed scratch arrays. Tiny tips and hardware dialog canvases retain the bitmap
+reference path. Geometry/tip masks are unchanged, but raster rounding can differ
+slightly. Complete stroke history, alpha lock and gray app previews share the new
+bitmap renderer. See PERFORMANCE.md for controlled comparisons (~2.5x faster dry
+raster) and remaining costs. Earlier v1 mask/timing paragraphs are historical.
+
 ## Brush
 
 `lab_brush` uses firmware NEO_BRUSH and renderer type 1. Modern source rendering
