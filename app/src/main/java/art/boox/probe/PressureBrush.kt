@@ -43,7 +43,9 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     val engineVersion = 1
     val inkColor: Int = settings?.shade?.argb ?: Color.BLACK
     init { require(minWidth.isFinite() && maxWidth.isFinite() && minWidth > 0 && maxWidth >= minWidth)
-        require(widthModifier.maxMultiplier.isFinite() && widthModifier.maxMultiplier >= 1f) }
+        require(widthModifier.maxMultiplier.isFinite() && widthModifier.maxMultiplier >= 1f)
+        if (booxFamily?.dry == true) DryBrushTips.preload(booxFamily)
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = inkColor; style = Paint.Style.FILL; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
@@ -64,7 +66,8 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     val hasDynamicWidth: Boolean get() = (!usesBooxEngine || booxFamily?.appPreviewWidth == true) &&
         (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
     fun width(sample: PenSample): Float = (if (booxFamily?.dry == true)
-        maxWidth * (0.22f + 0.78f * kotlin.math.sqrt(if (settings?.pressure == false) 1f else
+        maxWidth * ((if (booxFamily == BooxBrushFamily.CHARCOAL) 0.35f else 0.22f) +
+            (if (booxFamily == BooxBrushFamily.CHARCOAL) 0.65f else 0.78f) * kotlin.math.sqrt(if (settings?.pressure == false) 1f else
             sample.pressure.let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f })) else width(sample.pressure)) *
         widthModifier.multiplier(sample).let { if (it.isFinite()) it.coerceIn(1f, widthModifier.maxMultiplier) else 1f }
 

@@ -1,5 +1,10 @@
 # Brush input, tilt and live preview
 
+Current Lab extension: Brush, Pencil and Charcoal join Fountain; see
+[BRUSH_ENGINE.md](BRUSH_ENGINE.md) for presets, source-only contracts, tilt shading,
+tests and native preview approximation limits. Existing four tools keep their
+accepted geometry and input path. The paragraphs below describe earlier stages.
+
 Lab-only Fountain trial: the optional `booxRenderer=recovered` build installs a
 separate BOOX Art Lab app. It pairs native FOUNTAIN feedback with an editable Rust
 final renderer. `booxLab=true` compares the same adapter with official binaries.

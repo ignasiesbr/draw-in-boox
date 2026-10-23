@@ -5,6 +5,12 @@
 `onyxsdk-pen/native/onyx-neo-pen/src/lib.rs`. Upstream copyright/license:
 LGPL-3.0-only; LICENSE.txt and incorporated GPL-3.0.txt are included.
 
+BOOX Art modifications (2026-10-23): modern type 1 consumes every pressure sample
+without history cloning. `src/dry_brush.rs` adds source-only types 11/12 for Pencil/
+Charcoal, distance spacing, normalized inclination/azimuth, bounded seven-float dab
+records and isolated prediction. Types 1–10 retain their existing encodings. See
+docs/BRUSH_ENGINE.md for the app adapter and firmware-preview limitations.
+
 This crate builds an app-side Android native renderer, not a replacement for the
 BOOX SurfaceFlinger firmware. Keep the official input reader: upstream's current
 reader JNI uses session arguments missing in our pinned official Java class.

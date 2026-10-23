@@ -2,9 +2,12 @@
 
 The source-renderer trial is isolated in `art.boox.probe.lab`; see
 [docs/RECOVERED_RENDERER_EXPERIMENT.md](docs/RECOVERED_RENDERER_EXPERIMENT.md).
-Stable checkpoint is `29c7373`. Lab-only Fountain uses firmware FOUNTAIN plus an
-editable app-side Rust renderer; this does not replace firmware. Existing tools
-retain app-width PENCIL. Never apply both vendor and app pressure to the Lab preset.
+Stable checkpoint is `29c7373`. Lab Fountain/Brush/Charcoal use firmware family
+preview plus editable app-side Rust geometry; this does not replace firmware.
+Pencil uses firmware PENCIL with shared app width; existing tools retain app-width
+PENCIL. Never apply a second app width curve to vendor-dynamic families. See
+[docs/BRUSH_ENGINE.md](docs/BRUSH_ENGINE.md) for source-only Pencil/Charcoal, tilt,
+cached alpha masks, JNI batching, native approximation limits and validation.
 The official-SDK alternative is documented separately in
 [docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
 

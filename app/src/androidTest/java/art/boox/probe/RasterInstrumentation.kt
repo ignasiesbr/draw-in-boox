@@ -14,15 +14,25 @@ class RasterInstrumentation : Instrumentation() {
     private var performanceOnly = false
     private var asyncOnly = false
     private var fountainOnly = false
+    private var brushesOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
         fountainOnly = arguments?.getString("fountainOnly") == "true"
+        brushesOnly = arguments?.getString("brushesOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (brushesOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { BooxBrushChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: brush engine checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (fountainOnly) {
                 var failure: Throwable? = null
                 runOnMainSync { try { BooxFountainChecks.run(targetContext) } catch (error: Throwable) { failure = error } }

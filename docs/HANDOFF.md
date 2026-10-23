@@ -1,5 +1,16 @@
 # Research and handoff
 
+Charcoal expansion completed: source-only `lab_charcoal` (type 12) joins Brush
+and Pencil. Tilt defaults on for both dry brushes; independent pressure/tilt/shade
+controls live in the selected tool's dialog. Native small black Charcoal uses the
+firmware family; Pencil uses shared app width on PENCIL. Texture/opacity/tilt remain
+native approximations until physically compared. Gray/wide uses the actual app
+brush. The recovered Lab header now says `brushes v1`; log uiRevision is brush-engine-v1.
+29 source tests, source build/lint and full Go103 suite pass, including real gray
+dry-brush pre-lift and post-commit SurfaceView equivalence. Official build/lint,
+official Lab Brush and Fountain targeted checks pass. See BRUSH_ENGINE.md for the
+contract, modest raster optimization, remaining long-stroke cost and pen trials.
+
 Pencil expansion: source-only `lab_pencil` uses distance-spaced Rust type 11 and
 four shared grain masks, with pressure/tilt controls enabled by default. Black/
 narrow native PENCIL matches major width, but grain/opacity/ellipse are approximate

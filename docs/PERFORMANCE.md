@@ -1,5 +1,12 @@
 # Stroke responsiveness investigation
 
+Brush-engine follow-up: Pencil/Charcoal keep native black/narrow input and the
+accepted handoff; actual app previews use cached distance-spaced Rust geometry.
+Shared alpha-only masks prepare in background, and JNI input is batched. The warm
+1,000-sample texture benchmark still costs roughly 58–60ms to rasterize on UI;
+native feedback and background surface presentation do not eliminate this cost.
+See BRUSH_ENGINE.md for test conditions, limits and pending physical comparison.
+
 Recovered-renderer Lab follow-up: user tested `f4bde6c` Fountain Lab and reported
 "its good". Its fast live feedback still comes from BOOX firmware FOUNTAIN, while
 the editable Rust renderer supplies final geometry. This feedback supports that

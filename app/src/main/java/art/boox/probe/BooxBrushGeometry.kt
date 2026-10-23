@@ -13,7 +13,7 @@ import com.onyx.android.sdk.pennative.PenInkResult
  * coordinates; native handles are short-lived and never reach the surface worker. */
 internal class BooxBrushGeometry(private val size: Float, private val color: Int,
     private val family: BooxBrushFamily, pressure: Boolean, tilt: Boolean) {
-    private val dryGeometry = if (family.dry) DryBrushGeometry(size, color, family, pressure, tilt) else null
+    private val dryGeometry = if (family.dry) DryBrushGeometry(size, family, pressure, tilt) else null
     private var cachedSamples: List<PenSample>? = null
     private var cachedCount = -1
     private var cachedLast: PenSample? = null
@@ -34,7 +34,11 @@ internal class BooxBrushGeometry(private val size: Float, private val color: Int
 
     private fun prepare(samples: List<PenSample>) {
         if (samples === cachedSamples && samples.size == cachedCount && samples.lastOrNull() == cachedLast) return
-        if (samples.isEmpty()) { points = emptyList(); bounds = null; return }
+        if (samples.isEmpty()) {
+            points = emptyList(); bounds = null
+            cachedSamples = null; cachedCount = -1; cachedLast = null
+            return
+        }
         val config = PenConfig().apply {
             type = family.rendererType
             width = size; minWidth = minOf(0.5f, size); this.color = this@BooxBrushGeometry.color

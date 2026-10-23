@@ -11,9 +11,10 @@ enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val 
     ERASER("eraser", "Eraser", UiIcon.ERASER, 128f),
     LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE, booxFamily = BooxBrushFamily.FOUNTAIN),
     LAB_BRUSH("lab_brush", "Brush", UiIcon.BRUSH, booxFamily = BooxBrushFamily.BRUSH),
-    LAB_PENCIL("lab_pencil", "Pencil", UiIcon.PENCIL, 64f, BooxBrushFamily.PENCIL);
+    LAB_PENCIL("lab_pencil", "Pencil", UiIcon.PENCIL, 64f, BooxBrushFamily.PENCIL),
+    LAB_CHARCOAL("lab_charcoal", "Charcoal", UiIcon.CHARCOAL, 128f, BooxBrushFamily.CHARCOAL);
 
-    fun defaults() = BrushSettings(id, size = when (this) { MONOLINE, ERASER -> 32f; LAB_PENCIL -> 8f; else -> 12f },
+    fun defaults() = BrushSettings(id, size = when (this) { MONOLINE, ERASER -> 32f; LAB_PENCIL -> 8f; LAB_CHARCOAL -> 10f; else -> 12f },
         pressure = this == INK || this == TILT || booxFamily != null, tilt = this == TILT || booxFamily?.dry == true)
     companion object {
         val available get() = entries.filter { it.booxFamily == null || (BuildConfig.BOOX_LAB &&

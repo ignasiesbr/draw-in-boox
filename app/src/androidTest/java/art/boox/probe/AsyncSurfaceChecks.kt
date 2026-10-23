@@ -214,6 +214,39 @@ object AsyncSurfaceChecks {
                 sendPen(android.view.MotionEvent.ACTION_UP, 180f)
                 check(surface.history.undoCount == 1 && surface.document!!.layer.getPixel(120, 90) == InkShade.LIGHT.argb)
             }
+            if (BuildConfig.RENDERER_BACKEND == "recovered") {
+                for (preset in listOf(BrushPreset.LAB_PENCIL, BrushPreset.LAB_CHARCOAL)) {
+                    onMain {
+                        surface.createDocument(CanvasSpec(260, 260)); surface.rotateView(-22f)
+                        surface.zoom(ZoomAction.ACTUAL)
+                        surface.selectBrush(preset.defaults().copy(size = 10f, shade = InkShade.MEDIUM))
+                        surface.inputEnabled = true; surface.render()
+                        sendPen(android.view.MotionEvent.ACTION_DOWN, 60f)
+                        sendPen(android.view.MotionEvent.ACTION_MOVE, 180f)
+                    }
+                    val deadline = android.os.SystemClock.uptimeMillis() + 5000
+                    var live: android.graphics.Bitmap? = null
+                    while (live == null && android.os.SystemClock.uptimeMillis() < deadline) {
+                        val pixels = copySurface()
+                        val found = (-3..3).any { dy -> (-3..3).any { dx ->
+                            android.graphics.Color.red(pixels.getPixel(middle.x.toInt() + dx, middle.y.toInt() + dy)) < 240
+                        } }
+                        if (found) live = pixels else { pixels.recycle(); Thread.sleep(16) }
+                    }
+                    val livePixels = checkNotNull(live) { "${preset.label} app preview was invisible until lift" }
+                    try {
+                        onMain {
+                            check(surface.isDrawing && surface.history.undoCount == 0 && surface.document!!.layer.getPixel(120, 90) == 0)
+                            sendPen(android.view.MotionEvent.ACTION_UP, 180f)
+                            check(surface.history.undoCount == 1)
+                            surface.render()
+                        }
+                        val committed = copySurface()
+                        try { check(equivalent(livePixels, committed)) { "${preset.label} app preview changed after lift" } }
+                        finally { committed.recycle() }
+                    } finally { livePixels.recycle() }
+                }
+            }
             // Eraser preview must reveal the lower layer before lift without
             // mutating either layer or its undo history until commit.
             onMain {

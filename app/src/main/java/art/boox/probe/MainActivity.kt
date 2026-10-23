@@ -172,7 +172,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=history-controls-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=brush-engine-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -328,7 +328,7 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND})" else "BOOX Art"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · brushes v1" else "BOOX Art"
         documentInfo.text = "$title · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
@@ -398,22 +398,25 @@ class MainActivity : Activity() {
         val points = JSONArray()
         samples.forEach { p -> points.put(JSONArray().put(p.x).put(p.y).put(p.pressure).put(p.time).put(p.rawPressure)
             .put(p.tiltRadians ?: JSONObject.NULL).put(p.viewOrientationRadians ?: JSONObject.NULL)
-            .put(p.rawTiltX ?: JSONObject.NULL).put(p.rawTiltY ?: JSONObject.NULL)) }
+            .put(p.rawTiltX ?: JSONObject.NULL).put(p.rawTiltY ?: JSONObject.NULL)
+            .put(p.documentAzimuthRadians ?: JSONObject.NULL)) }
         val range = JSONObject().put("min", stroke.pressureRange.min).put("max", stroke.pressureRange.max)
             .put("origin", stroke.pressureRange.origin)
         val captured = stroke.brush
         val brush = JSONObject().put("minWidthPx", captured.minWidth).put("maxWidthPx", captured.maxWidth)
-            .put("curve", "linear").put("widthModifier", captured.widthModifier.id)
+            .put("curve", captured.booxFamily?.label?.lowercase() ?: "linear").put("widthModifier", captured.widthModifier.id)
+            .put("pressureEnabled", captured.settings?.pressure ?: (captured.minWidth != captured.maxWidth))
+            .put("tiltEnabled", captured.settings?.tilt ?: (captured.widthModifier !== NoWidthModifier))
             .put("maxWidthMultiplier", captured.widthModifier.maxMultiplier)
             .put("maxRenderedWidthPx", captured.maxRenderedWidth)
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
             .put("settingsVersion", 2).put("preview", if (source == "boox") {
                 if (captured.isEraser) "native-white-eraser" else if (captured.usesBooxEngine) "native-${captured.booxFamily!!.label.lowercase()}" else "native-round-width"
-            } else "app-round-brush")
+            } else if (captured.usesBooxEngine) "app-${captured.booxFamily!!.label.lowercase()}" else "app-round-brush")
             .put("operation", if (captured.isEraser) "erase" else "paint")
             .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))
-        val entry = JSONObject().put("schemaVersion", 8).put("source", source).put("stroke", number)
+        val entry = JSONObject().put("schemaVersion", 9).put("source", source).put("stroke", number)
             .put("pressureRange", range).put("brush", brush)
             .put("documentId", documentId).put("layerId", layerId)
             .put("coordinateSpace", "document").put("canvasWidth", spec.width).put("canvasHeight", spec.height)

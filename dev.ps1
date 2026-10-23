@@ -4,7 +4,8 @@ param(
     [string]$Sdk = "$env:LOCALAPPDATA\Android\Sdk",
     [ValidateSet('official', 'recovered')][string]$Renderer = 'official',
     [switch]$Lab,
-    [switch]$FountainOnly
+    [switch]$FountainOnly,
+    [switch]$BrushesOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -67,13 +68,17 @@ switch ($Command) {
         Invoke-Adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
         Invoke-Adb shell pm enable --user 0 $applicationPackage
         $instrumentArgs = @('-w')
+        if ($BrushesOnly) {
+            if (!($Lab -or $Renderer -eq 'recovered')) { throw '-BrushesOnly requires -Lab or -Renderer recovered.' }
+            $instrumentArgs += @('-e', 'brushesOnly', 'true')
+        }
         if ($FountainOnly) {
             if (!($Lab -or $Renderer -eq 'recovered')) { throw '-FountainOnly requires -Lab or -Renderer recovered.' }
             $instrumentArgs += @('-e', 'fountainOnly', 'true')
         }
         $output = Invoke-Adb shell am instrument @instrumentArgs "$applicationPackage.test/art.boox.probe.RasterInstrumentation"
         $output
-        $expected = if ($FountainOnly) { 'PASS: fountain renderer checks' } else { 'PASS: bitmap' }
+        $expected = if ($BrushesOnly) { 'PASS: brush engine checks' } elseif ($FountainOnly) { 'PASS: fountain renderer checks' } else { 'PASS: bitmap' }
         if (($output -join "`n") -notmatch $expected) { throw 'Device checks failed' }
     }
     'capture' {

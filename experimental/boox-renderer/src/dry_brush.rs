@@ -1,5 +1,5 @@
 //! BOOX Art extensions, deliberately separate from recovered reference encodings.
-//! Type 11: Pencil. Output records: x,y,major,minor,angle(degrees),opacity,tip index.
+//! Types 11: Pencil, 12: Charcoal. Records: x,y,major,minor,angle(degrees),opacity,tip index.
 use super::*;
 
 const MAX_DABS: usize = 100_000;
@@ -15,9 +15,11 @@ impl PenState {
             let t = ((finite_or(point.tilt_x, 0.0) - 15.0) / 50.0).clamp(0.0, 1.0);
             t * t * (3.0 - 2.0 * t)
         } else { 0.0 };
-        let major = self.config.width * (0.22 + 0.78 * pressure.sqrt()) * (1.0 + 1.5 * tilt);
+        let charcoal = self.pen_type == 12;
+        let response = if charcoal { 0.35 + 0.65 * pressure.sqrt() } else { 0.22 + 0.78 * pressure.sqrt() };
+        let major = self.config.width * response * (1.0 + 1.5 * tilt);
         let minor = major / (1.0 + 1.5 * tilt);
-        let opacity = 0.08 + 0.35 * pressure;
+        let opacity = if charcoal { 0.18 + 0.55 * pressure } else { 0.08 + 0.35 * pressure };
         let angle = if tilt > 0.0 { finite_or(point.tilt_y, 0.0) } else { 0.0 };
         ink.points.extend_from_slice(&[point.x, point.y, major, minor,
             angle, opacity, (self.dry_dabs % 4) as f32]);
@@ -51,8 +53,9 @@ impl PenState {
                     position += spacing;
                 }
                 self.dry_remaining = position - length;
-                if phase == Phase::Up && length > 0.0 && self.dry_remaining < spacing - 1e-6 {
+                if phase == Phase::Up && self.dry_remaining < spacing - 1e-6 {
                     self.dry_dab(&mut ink, end);
+                    self.dry_remaining = spacing;
                 }
             } else {
                 self.dry_dab(&mut ink, end);
@@ -111,5 +114,40 @@ mod tests {
         assert_eq!(tail.points[0], 0.2);
         let huge = pen.process(&[point(1e20)], None, Phase::Move).0;
         assert!(huge.overflowed && huge.point_sizes.len() <= MAX_DABS);
+    }
+
+    #[test]
+    fn both_families_keep_pressure_and_tilt_stable_at_different_input_rates() {
+        for kind in [11, 12] {
+            let mut sparse = pen(); sparse.pen_type = kind;
+            let mut dense = sparse.clone();
+            let trace = |x: f32| Touch { x, pressure: 0.1 + x * 0.008, tilt_x: x * 0.65, tilt_y: 30.0, ..point(x) };
+            sparse.process(&[trace(0.0)], None, Phase::Down);
+            dense.process(&[trace(0.0)], None, Phase::Down);
+            let all = sparse.process(&[trace(100.0)], None, Phase::Move).0;
+            let mut stepped = Vec::new();
+            for x in 1..=100 { stepped.extend(dense.process(&[trace(x as f32)], None, Phase::Move).0.points); }
+            assert_eq!(all.points.len(), stepped.len());
+            for (a,b) in all.points.iter().zip(stepped) { assert!((a-b).abs() < 0.001); }
+            assert!(all.points.chunks_exact(7).all(|p| p[2] <= 20.0 && p[3] <= p[2]));
+            sparse.config.pressure_sensitivity = 0.0;
+            let light = sparse.process(&[Touch { pressure: 0.0, ..point(0.0) }], None, Phase::Down).0;
+            let heavy = sparse.process(&[Touch { pressure: 1.0, ..point(0.0) }], None, Phase::Down).0;
+            assert_eq!(light.points, heavy.points);
+        }
+    }
+
+    #[test]
+    fn endpoint_is_identical_with_or_without_a_duplicate_up_sample() {
+        for kind in [11, 12] {
+            let mut a = pen(); a.pen_type = kind;
+            let mut b = a.clone();
+            a.process(&[point(0.0)], None, Phase::Down);
+            b.process(&[point(0.0)], None, Phase::Down);
+            let expected = a.process(&[point(9.7)], None, Phase::Up).0.points;
+            let mut actual = b.process(&[point(9.7)], None, Phase::Move).0.points;
+            actual.extend(b.process(&[point(9.7)], None, Phase::Up).0.points);
+            assert_eq!(expected, actual);
+        }
     }
 }

@@ -852,7 +852,7 @@ impl PenState {
             .collect::<Vec<_>>();
         let mut real = InkData::default();
         let mut predicted = InkData::default();
-        if self.pen_type == 11 {
+        if self.pen_type == 11 || self.pen_type == 12 {
             let prediction = prediction.map(|p| self.transform(p));
             return self.process_dry(&transformed, prediction, phase);
         }
@@ -1767,7 +1767,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCr
     config: JObject<'local>,
 ) -> jlong {
     modern_jni_boundary(&mut unowned_env, |unowned_env| {
-        if !(1..=11).contains(&pen_type) || config.is_null() {
+        if !(1..=12).contains(&pen_type) || config.is_null() {
             unowned_env
                 .with_env(|env| -> jni::errors::Result<()> {
                     throw_api_failure(

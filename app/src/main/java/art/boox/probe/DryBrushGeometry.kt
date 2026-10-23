@@ -9,10 +9,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Source-only seven-float dab contract. No bitmap is allocated by JNI per dab. */
-internal class DryBrushGeometry(private val size: Float, color: Int, private val family: BooxBrushFamily,
+internal class DryBrushGeometry(private val size: Float, private val family: BooxBrushFamily,
     private val pressure: Boolean, private val tilt: Boolean) {
-    private val tint = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
-    private val destination = RectF()
+    private val matrix = Matrix()
+    private val transform = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
     private var cachedSamples: List<PenSample>? = null
     private var cachedCount = -1
     private var cachedLast: PenSample? = null
@@ -23,24 +23,33 @@ internal class DryBrushGeometry(private val size: Float, color: Int, private val
 
     fun draw(canvas: Canvas, paint: Paint, samples: List<PenSample>) {
         prepare(samples)
-        val oldAlpha = paint.alpha; val oldFilter = paint.colorFilter; val oldFiltering = paint.isFilterBitmap
-        paint.colorFilter = tint; paint.isFilterBitmap = true
+        val tips = DryBrushTips.forFamily(family)
+        val oldAlpha = paint.alpha; val oldFiltering = paint.isFilterBitmap
+        paint.isFilterBitmap = true
         try {
             for (i in data.indices step 7) {
                 val major = data[i + 2]; val minor = data[i + 3]
                 paint.alpha = (data[i + 5] * oldAlpha).toInt().coerceIn(0, 255)
-                val saved = canvas.save()
-                canvas.translate(data[i], data[i + 1]); canvas.rotate(data[i + 4])
-                destination.set(-major / 2f, -minor / 2f, major / 2f, minor / 2f)
-                canvas.drawBitmap(DryBrushTips.pencil[data[i + 6].toInt()], null, destination, paint)
-                canvas.restoreToCount(saved)
+                val radians = Math.toRadians(data[i + 4].toDouble())
+                val cosine = cos(radians).toFloat(); val sine = sin(radians).toFloat()
+                val tip = tips[data[i + 6].toInt()]
+                transform[0] = cosine * major / tip.width; transform[1] = -sine * minor / tip.height
+                transform[2] = data[i] - cosine * major / 2f + sine * minor / 2f
+                transform[3] = sine * major / tip.width; transform[4] = cosine * minor / tip.height
+                transform[5] = data[i + 1] - sine * major / 2f - cosine * minor / 2f
+                matrix.setValues(transform)
+                canvas.drawBitmap(tip, matrix, paint)
             }
-        } finally { paint.alpha = oldAlpha; paint.colorFilter = oldFilter; paint.isFilterBitmap = oldFiltering }
+        } finally { paint.alpha = oldAlpha; paint.isFilterBitmap = oldFiltering }
     }
 
     private fun prepare(samples: List<PenSample>) {
         if (samples === cachedSamples && samples.size == cachedCount && samples.lastOrNull() == cachedLast) return
-        if (samples.isEmpty()) { data = FloatArray(0); bounds = null; return }
+        if (samples.isEmpty()) {
+            data = FloatArray(0); bounds = null
+            cachedSamples = null; cachedCount = -1; cachedLast = null
+            return
+        }
         check(BuildConfig.RENDERER_BACKEND == "recovered") { "Dry brushes require the editable renderer" }
         val config = PenConfig().apply {
             type = family.rendererType; width = size; maxTouchPressure = 1f
@@ -79,8 +88,8 @@ internal class DryBrushGeometry(private val size: Float, color: Int, private val
                 val angle = Math.toRadians(values[i + 4].toDouble())
                 val dx = (abs(cos(angle)) * major + abs(sin(angle)) * minor).toFloat() / 2f + 2f
                 val dy = (abs(sin(angle)) * major + abs(cos(angle)) * minor).toFloat() / 2f + 2f
-                val region = RectF(values[i] - dx, values[i + 1] - dy, values[i] + dx, values[i + 1] + dy)
-                resultBounds?.union(region) ?: run { resultBounds = region }
+                if (resultBounds == null) resultBounds = RectF(values[i] - dx, values[i + 1] - dy, values[i] + dx, values[i + 1] + dy)
+                else resultBounds!!.union(values[i] - dx, values[i + 1] - dy, values[i] + dx, values[i + 1] + dy)
             }
             values.copyInto(output, used); used = required
         }
@@ -101,18 +110,40 @@ internal class DryBrushGeometry(private val size: Float, color: Int, private val
 
 /** Four shared, bounded masks; colors and sizes reuse these resources. Deterministic grain. */
 internal object DryBrushTips {
-    val pencil: Array<Bitmap> by lazy { Array(4) { variant ->
+    private class Masks(private val coarse: Boolean) {
+        private val started = java.util.concurrent.atomic.AtomicBoolean()
+        private val task = java.util.concurrent.FutureTask { generate(coarse) }
+        fun start() {
+            if (started.compareAndSet(false, true)) Thread({
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                task.run()
+            }, "BrushTips").start()
+        }
+        fun get(): Array<Bitmap> { start(); return task.get() }
+    }
+    private val pencil = Masks(false)
+    private val charcoal = Masks(true)
+    private fun masks(family: BooxBrushFamily) = if (family == BooxBrushFamily.CHARCOAL) charcoal else pencil
+    fun preload(family: BooxBrushFamily) = masks(family).start()
+    fun forFamily(family: BooxBrushFamily) = masks(family).get()
+
+    private fun generate(coarse: Boolean): Array<Bitmap> = Array(4) { variant ->
         val side = 64
-        val pixels = IntArray(side * side) { index ->
+        val pixels = ByteArray(side * side) { index ->
             val x = (index % side + 0.5f - side / 2f) / (side / 2f)
             val y = (index / side + 0.5f - side / 2f) / (side / 2f)
             val radius = x * x + y * y
-            var hash = index * 374761393 + variant * 668265263
+            val grainIndex = if (coarse) index % side / 3 + (index / side / 3) * side else index
+            var hash = grainIndex * 374761393 + variant * 668265263
             hash = (hash xor (hash ushr 13)) * 1274126177
             val grain = (hash ushr 24) and 255
-            val alpha = if (radius >= 1f) 0 else ((1f - radius) * (60 + grain * 0.76f)).toInt()
-            Color.argb(alpha, 0, 0, 0)
+            val alpha = if (radius >= 1f) 0 else if (coarse) {
+                if (grain < 60) 0 else ((1f - radius * radius) * (80 + grain * 0.68f)).toInt()
+            } else ((1f - radius) * (60 + grain * 0.76f)).toInt()
+            alpha.toByte()
         }
-        Bitmap.createBitmap(pixels, side, side, Bitmap.Config.ARGB_8888)
-    } }
+        Bitmap.createBitmap(side, side, Bitmap.Config.ALPHA_8).apply {
+            copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(pixels))
+        }
+    }
 }
