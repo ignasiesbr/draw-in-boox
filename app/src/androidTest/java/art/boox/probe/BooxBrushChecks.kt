@@ -9,6 +9,9 @@ import java.io.File
 object BooxBrushChecks {
     fun run(context: Context) {
         if (!BuildConfig.BOOX_LAB) return
+        check(BooxBrushFamily.PENCIL.previewStyle == com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_CHARCOAL_V2)
+        check(!BrushPreset.LAB_PENCIL.defaults().compile().hasDynamicWidth) { "Textured firmware received a second pressure curve" }
+        check(BooxBrushFamily.CHARCOAL.previewStyle == com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_CHARCOAL)
         checkFamily(context, BrushPreset.LAB_BRUSH)
         if (BuildConfig.RENDERER_BACKEND == "recovered") {
             checkFamily(context, BrushPreset.LAB_PENCIL)

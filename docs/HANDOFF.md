@@ -1,5 +1,12 @@
 # Research and handoff
 
+Physical brush feedback: Charcoal works okay on `82b773c`; Pencil native preview
+differs from final graphite. Capture 20261023-212120 records that session. Pencil
+preview v2 trials native CHARCOAL_V2 instead of the solid PENCIL proxy, with no
+app width updater/double pressure curve. Final Rust geometry and accepted Charcoal
+are unchanged. Physical appearance of this candidate is pending user testing.
+User requests a commit before investigating pen-up redraw/performance separately.
+
 Charcoal expansion completed: source-only `lab_charcoal` (type 12) joins Brush
 and Pencil. Tilt defaults on for both dry brushes; independent pressure/tilt/shade
 controls live in the selected tool's dialog. Native small black Charcoal uses the

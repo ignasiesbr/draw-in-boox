@@ -7,7 +7,9 @@ enum class BooxBrushFamily(val rendererType: Int, val previewStyle: Int, val lab
     val dry: Boolean = false, val appPreviewWidth: Boolean = false) {
     FOUNTAIN(2, TouchHelper.STROKE_STYLE_FOUNTAIN, "Fountain"),
     BRUSH(1, TouchHelper.STROKE_STYLE_NEO_BRUSH, "Brush"),
-    PENCIL(11, TouchHelper.STROKE_STYLE_PENCIL, "Pencil", dry = true, appPreviewWidth = true),
+    // Solid PENCIL could share width but could not show graphite grain/opacity.
+    // Trial the vendor's textured response; it must own its pressure curve.
+    PENCIL(11, TouchHelper.STROKE_STYLE_CHARCOAL_V2, "Pencil", dry = true),
     CHARCOAL(12, TouchHelper.STROKE_STYLE_CHARCOAL, "Charcoal", dry = true);
 
     fun maximumWidth(size: Float): Float = when (this) {

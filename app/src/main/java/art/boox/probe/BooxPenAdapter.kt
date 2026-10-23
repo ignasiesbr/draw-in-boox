@@ -118,7 +118,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             setPencil = { target.setStrokeStyle(view.brush.booxFamily?.previewStyle ?: TouchHelper.STROKE_STYLE_PENCIL) },
             enableInput = { target.setRawInputReaderEnable(true) })
         StrokePerformance.log("nativeResume handoff=$handoff configuredWhilePaused=true totalMs=${StrokePerformance.ms(started)}")
-        Log.d("BooxProbe", "Hardware preview: style=${view.brush.booxFamily?.label ?: "pencil"} baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
+        Log.d("BooxProbe", "Hardware preview: style=${view.brush.booxFamily?.label ?: "pencil"} styleId=${view.brush.booxFamily?.previewStyle ?: TouchHelper.STROKE_STYLE_PENCIL} appWidth=${view.brush.hasDynamicWidth} baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
     }
 
     private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {

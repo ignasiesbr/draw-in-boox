@@ -27,6 +27,24 @@ need physical comparison.
 
 ## Pencil
 
+Physical feedback on `82b773c`: user reports Charcoal works okay, but Pencil preview
+differs from its real look. Capture `captures/20261023-212120` preserves that trial.
+Pencil had a solid round firmware PENCIL preview despite textured/translucent,
+elliptical final geometry. Sharing only major width cannot reproduce those pixels.
+
+`pencil-preview-v2` trials firmware CHARCOAL_V2 (style 6) for Pencil's small black
+feedback. It owns native dynamics; no app width updater is attached, avoiding a
+second pressure response and contact-time shader changes. Rust type 11, tip masks,
+final pixels, controls and the 450ms async handoff are unchanged. Charcoal retains
+its physically tested firmware CHARCOAL (style 4). Gray/wide brushes keep actual
+app preview. This textured native candidate still needs physical comparison; SDK
+setup and raster tests cannot establish a match. Header/log identify pencil preview v2.
+Earlier Pencil preview paragraphs below describe v1.
+Build/lint and full Go103 suite pass for v2, including native family setup/reopen.
+Pencil/Charcoal fixture PNGs are byte-identical to the pre-v2 fixtures, confirming
+the preview trial did not change their final artwork. This is not a measurement
+of native live pixels; physical confirmation remains pending.
+
 `lab_pencil` is source-only type 11, 1–64px, default 8px. Pressure changes contact
 width and opacity; tilt broadens the contact up to 2.5x by 65 degrees. Both controls
 are enabled by default and can be disabled independently. Missing/invalid tilt

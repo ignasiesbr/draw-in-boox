@@ -4,7 +4,8 @@ The source-renderer trial is isolated in `art.boox.probe.lab`; see
 [docs/RECOVERED_RENDERER_EXPERIMENT.md](docs/RECOVERED_RENDERER_EXPERIMENT.md).
 Stable checkpoint is `29c7373`. Lab Fountain/Brush/Charcoal use firmware family
 preview plus editable app-side Rust geometry; this does not replace firmware.
-Pencil uses firmware PENCIL with shared app width; existing tools retain app-width
+Pencil now trials firmware CHARCOAL_V2 for textured feedback after the solid PENCIL
+preview differed visibly from final graphite; existing tools retain app-width
 PENCIL. Never apply a second app width curve to vendor-dynamic families. See
 [docs/BRUSH_ENGINE.md](docs/BRUSH_ENGINE.md) for source-only Pencil/Charcoal, tilt,
 cached alpha masks, JNI batching, native approximation limits and validation.
