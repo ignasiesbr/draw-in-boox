@@ -59,11 +59,17 @@ class RasterInstrumentation : Instrumentation() {
                     GestureZoomChecks.run(targetContext)
                     HistoryChecks.run(targetContext)
                     HistoryTapChecks.run()
+                    LayerChecks.run(targetContext)
+                    LayerRenameChecks.run(targetContext)
+                    LayerOpacityChecks.run(targetContext)
+                    AlphaLockChecks.run(targetContext)
                 } finally { file.delete() }
               } catch (error: Throwable) { failure = error }
             }
             failure?.let { throw it }
             CanvasDialogChecks.run(this)
+            LayerPanelChecks.run(this)
+            SettingsChecks.run(this)
             result.putString("stream", "PASS: bitmap stroke, PNG, pressure/input/lifecycle, presets/limits, migration, viewport/rotation/mask, two-finger pan/cancellation/persistence, fixed document/export orientation, document checkpoint, canvas selector validation\n")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {

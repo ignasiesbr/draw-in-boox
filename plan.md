@@ -152,7 +152,9 @@ Validation:
 
 ## 5. Layers, undo/redo, and editable persistence
 
-**Initial history implemented:** strokes and Clear are `DocumentEdit` actions. The single-layer history stores compressed before/after 128px tile changes, up to 10 actions and a 32MiB/heap-based budget. Undo/Redo buttons plus two-finger tap Undo / double two-finger tap Redo are implemented; physical gesture validation is pending. Single-tap dispatch waits briefly to disambiguate double-tap redo. New effective edits invalidate redo; view changes do not enter history. New canvas/restart clears the session stack. Automated coverage includes generic fill/cut-style raster edits, overlap/alpha, Clear, branching, eviction, timing/cancellation and current pen/navigation regression checks. Layers, eraser tools, structural layer actions and durable save/open remain future work; history persistence across restarts is not implemented.
+**Layers implemented:** collapsible panel (right by default, configurable) with stable-ID selection, add/delete, lock/visibility, duplicate, merge down and up/down reordering. Memory-based layer cap, cached dirty-region composition, layer-targeted raster history and undoable structural commands are in place. Internal checkpoint version 2 preserves layers and reads prior checkpoints; public file sharing/save-open remains deferred at the user's request. Automated layer/history/input/export/migration and real panel layout tests pass. Physical pen/layer UX checks remain. See [docs/LAYERS.md](docs/LAYERS.md).
+
+**Initial history implemented:** strokes and Clear are `DocumentEdit` actions. The raster history stores compressed before/after 128px tile changes, up to 10 actions and a 32MiB/heap-based budget. Undo/Redo buttons plus two-finger tap Undo / double two-finger tap Redo are implemented; physical gesture validation is pending. Single-tap dispatch waits briefly to disambiguate double-tap redo. New effective edits invalidate redo; view changes do not enter history. New canvas/restart clears the session stack. Automated coverage includes generic fill/cut-style raster edits, overlap/alpha, Clear, branching, eviction, timing/cancellation and current pen/navigation regression checks. Eraser tools, layer renaming/opacity and durable public save/open remain future work; history persistence across restarts is not implemented.
 
 **Purpose:** make artwork editable across tools, sessions, and multiple raster layers. Build these together because history must identify which document and layer each action affects.
 
@@ -209,3 +211,9 @@ Toolbar position, orientation, compactness, grouping, customization interaction,
 - Run `dev.ps1 build` and relevant device tests for each meaningful engine/input change. Physically check hardware preview whenever mapping, brush style, or lifecycle behavior changes.
 - Keep [README.md](README.md), [docs/PROBE.md](docs/PROBE.md), and [docs/HANDOFF.md](docs/HANDOFF.md) current as milestones are completed. Mark implementation and verification separately.
 - Review the UI in depth separately. The plan defines behavior, data ownership, and validation; it does not settle the final interface.
+
+Layer UI follow-up complete: right-side default with persistent left/right settings, shared monochrome action/toggle icons, black active borders and undoable long-press rename. See [e-ink UI conventions](docs/EINK_UI.md). Integrated build/lint and device tests pass; physical UX review follows.
+
+Per-layer settings added: thumbnail long-press opens an opacity draft slider (0-100%), Apply/Cancel, undo/redo and persistence. Composition, duplicate, merge and PNG respect opacity. Full device checks and build/lint pass; BOOX live pen ink remains full black until pen-up.
+
+Alpha lock delivered in layer settings: preserve pixel alpha during strokes, combined opacity/alpha-lock Apply/Cancel, undo/redo and persistence. Clear is protected; BOOX preview masking is applied at pen-up.

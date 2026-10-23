@@ -21,13 +21,15 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
 
     fun open(): Boolean {
         close()
+        if (!view.canDraw) return false
         return try {
             val maximum = EpdController.getMaxTouchPressure()
             check(maximum.isFinite() && maximum > 0f) { "Firmware pressure maximum is invalid: $maximum" }
             val range = PressureRange(0f, maximum, "boox-firmware")
             val session = generation
             val transform = view.viewport.transform
-            val created = TouchHelper.create(view, TouchHelper.FEATURE_SF_TOUCH_RENDER, callback(session, range, transform))
+            val layerId = checkNotNull(view.document).layerId
+            val created = TouchHelper.create(view, TouchHelper.FEATURE_SF_TOUCH_RENDER, callback(session, range, transform, layerId))
             helper = created
             // Use raw digitizer/SF rendering, excluding the SDK's AppTouchRender finger path.
             created.enableFingerTouch(false)
@@ -89,7 +91,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         Log.d("BooxProbe", "Hardware preview: fountain viewWidth=$width zoom=${view.viewport.transform.scale}")
     }
 
-    private fun callback(session: Int, range: PressureRange, transform: ViewTransform) = object : RawInputCallback() {
+    private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String) = object : RawInputCallback() {
         override fun onBeginRawDrawing(b: Boolean, p: TouchPoint) {
             view.post { if (session == generation && view.inputEnabled && view.rawInput) view.beginRawStroke() }
             Log.d("BooxProbe", "raw begin x=${p.x} y=${p.y} pressure=${p.pressure}")
@@ -112,7 +114,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
                     val spec = view.document?.spec
                     if (first != null && spec != null && first.x >= 0 && first.y >= 0 &&
                         first.x < spec.width && first.y < spec.height) {
-                        view.commit(samples, "boox", range)
+                        view.commit(samples, "boox", range, layerId)
                     } else view.render()
                     try {
                         helper?.let { active -> active.setRawDrawingEnabled(false); resumePreview(active) }

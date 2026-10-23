@@ -23,6 +23,12 @@ class MainActivity : Activity() {
     private lateinit var documentInfo: TextView
     private lateinit var undoButton: Button
     private lateinit var redoButton: Button
+    private lateinit var layerPanel: LayerPanel
+    private lateinit var clearButton: Button
+    private lateinit var settingsStore: AppSettingsStore
+    private var settings = AppSettings()
+    private lateinit var drawingArea: LinearLayout
+    private lateinit var canvasArea: FrameLayout
     private var preferBoox = true
     private var resumed = false
     private var strokeCount = 0
@@ -30,6 +36,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        settingsStore = AppSettingsStore(this)
+        settings = settingsStore.load()
         preferBoox = getPreferences(0).getBoolean("boox", true)
         File(filesDir, "strokes.jsonl").createNewFile()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE) }
@@ -55,8 +63,8 @@ class MainActivity : Activity() {
         undoButton = button(toolbar, "Undo") { if (!surface.undo()) historyBusy() }
         redoButton = button(toolbar, "Redo") { if (!surface.redo()) historyBusy() }
         undoButton.isEnabled = false; redoButton.isEnabled = false
-        button(toolbar, "Clear") {
-            android.app.AlertDialog.Builder(this).setMessage("Clear this drawing?")
+        clearButton = button(toolbar, "Clear") {
+            android.app.AlertDialog.Builder(this).setMessage("Clear the selected layer?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
                     adapter.close(); surface.clear(); strokeCount = 0; configurePen(); adapter.refresh()
                 }.show()
@@ -68,6 +76,10 @@ class MainActivity : Activity() {
         button(navigation, "+") { zoom(ZoomAction.IN) }
         button(navigation, "Fit") { zoom(ZoomAction.FIT) }
         button(navigation, "100%") { zoom(ZoomAction.ACTUAL) }
+        navigation.addView(EinkIconButton(this, UiIcon.SETTINGS, "Settings").apply {
+            tag = "Settings"
+            setOnClickListener { showSettings() }
+        }, LinearLayout.LayoutParams(dp(52), dp(60)))
         root.addView(navigation)
         val rotation = LinearLayout(this)
         button(rotation, "Rotate −15°") { rotateView(surface.viewport.rotationDegrees - 15f) }
@@ -94,10 +106,15 @@ class MainActivity : Activity() {
         surface.historyChanged = {
             undoButton.isEnabled = surface.history.canUndo
             redoButton.isEnabled = surface.history.canRedo
+            if (::layerPanel.isInitialized) layerPanel.invalidateThumbnails()
+        }
+        surface.layersChanged = {
+            clearButton.isEnabled = surface.canDraw && surface.document?.activeLayer?.alphaLocked != true
+            if (::layerPanel.isInitialized) layerPanel.render(surface.document)
         }
         surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
         surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
-        val canvasArea = FrameLayout(this)
+        canvasArea = FrameLayout(this)
         canvasArea.addView(surface, FrameLayout.LayoutParams(-1, -1))
         val gestureIndicator = GestureIndicator(this, adapter::setIndicatorFastRefresh)
         // A 280dp square fits the badge's diagonal at every rotation angle.
@@ -105,13 +122,59 @@ class MainActivity : Activity() {
             android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(12) })
         surface.rotationPreviewChanged = gestureIndicator::showAngle
         surface.zoomPreviewChanged = gestureIndicator::showZoom
-        root.addView(canvasArea, LinearLayout.LayoutParams(-1, 0, 1f))
+        layerPanel = LayerPanel(this, getPreferences(0).getBoolean("layersExpanded", true),
+            toggle = { expanded ->
+                val allowed = surface.preparePanelResize()
+                if (allowed) getPreferences(0).edit().putBoolean("layersExpanded", expanded).apply()
+                else historyBusy()
+                allowed
+            },
+            select = { id -> if (!surface.selectLayer(id)) historyBusy() },
+            command = { command ->
+                try { if (!surface.applyLayerCommand(command)) { historyBusy(); layerPanel.render(surface.document) } }
+                catch (failure: Exception) { Toast.makeText(this, failure.message, Toast.LENGTH_LONG).show() }
+                catch (failure: OutOfMemoryError) { Toast.makeText(this, "Not enough memory for another layer.", Toast.LENGTH_LONG).show() }
+            })
+        drawingArea = LinearLayout(this)
+        arrangeDrawingArea()
+        root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private fun arrangeDrawingArea() {
+        // Move only the panel. Keeping the SurfaceView attached preserves its bitmap and
+        // surface lifecycle; a side change may retain exactly the same canvas dimensions.
+        if (canvasArea.parent == null) drawingArea.addView(canvasArea, LinearLayout.LayoutParams(0, -1, 1f))
+        if (layerPanel.parent != null) drawingArea.removeView(layerPanel)
+        val index = if (settings.layerPanelSide == LayerPanelSide.LEFT) 0 else drawingArea.childCount
+        drawingArea.addView(layerPanel, index, LinearLayout.LayoutParams(layerPanel.panelWidth, -1))
+    }
+
+    private fun showSettings() {
+        if (surface.isDrawing || surface.isNavigating) {
+            Toast.makeText(this, "Finish drawing or navigation before opening settings.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        SettingsDialog.show(this, settings) { updated ->
+            if (updated == settings) true
+            else if (!surface.preparePanelResize()) {
+                Toast.makeText(this, "Finish drawing or navigation before changing settings.", Toast.LENGTH_SHORT).show()
+                false
+            } else {
+                settings = updated
+                settingsStore.save(updated)
+                arrangeDrawingArea()
+                // Position, rather than size, can change. Explicitly reopen raw input
+                // after layout so the BOOX screen-space input region follows the canvas.
+                drawingArea.post { schedulePenConfiguration() }
+                true
+            }
+        }
+    }
 
     private fun historyBusy() {
         Toast.makeText(this, "Finish drawing or navigation before changing history.", Toast.LENGTH_SHORT).show()
@@ -132,6 +195,13 @@ class MainActivity : Activity() {
         surface.cancelStroke()
         surface.inputEnabled = resumed && hasWindowFocus()
         if (!surface.inputEnabled || surface.document == null || surface.width == 0 || !surface.holder.surface.isValid) return
+        if (!surface.canDraw) {
+            mode.text = if (preferBoox) "BOOX pen" else "Android pen"
+            status.text = if (surface.document!!.activeLayer.locked) "Layer locked · select another layer or unlock it"
+                else "Layer hidden · show it or select another layer"
+            writeDocumentState()
+            return
+        }
         if (preferBoox) adapter.open()
         else { status.text = "Android pen ready · pressure controls width"; mode.text = "Android pen" }
         writeDocumentState()
@@ -148,6 +218,10 @@ class MainActivity : Activity() {
             .put("mode", if (surface.rawInput) "boox" else "android")
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
+            .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
+            .put("layers", JSONArray().apply { document.layers.forEach { layer ->
+                put(JSONObject().put("id", layer.id).put("name", layer.name).put("locked", layer.locked).put("visible", layer.visible).put("opacity", layer.opacity).put("alphaLocked", layer.alphaLocked))
+            } })
             .put("maxCanvasPixels", CanvasSizes.maxPixels).put("heapLimitBytes", Runtime.getRuntime().maxMemory())
             .put("wallTimeMs", System.currentTimeMillis())
         document.spec.ppi?.let { state.put("ppi", it) }
@@ -175,7 +249,7 @@ class MainActivity : Activity() {
             else { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() }
         }
     }
-    override fun onDestroy() { adapter.close(); super.onDestroy() }
+    override fun onDestroy() { adapter.close(); surface.dispose(); super.onDestroy() }
 
     private fun updateDocumentInfo() {
         val document = surface.document ?: return

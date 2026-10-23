@@ -1,6 +1,7 @@
 package art.boox.probe
 
 import android.graphics.Canvas
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.graphics.RectF
 import java.io.ByteArrayInputStream
@@ -34,7 +35,7 @@ class StrokeEdit(private val samples: List<PenSample>, private val brush: Pressu
             else null
         }
     }
-    override fun apply(document: DrawingDocument) = brush.draw(Canvas(document.layer), samples)
+    override fun apply(document: DrawingDocument) = brush.draw(Canvas(document.layer), samples, document.activeLayer.alphaLocked)
 }
 
 object ClearLayerEdit : DocumentEdit {
@@ -51,20 +52,44 @@ class EditHistory(
 ) {
     init { require(capacity > 0 && maxBytes > 0) }
     private data class Patch(val rect: Rect, val bytes: ByteArray) {
-        fun restore(document: DrawingDocument) {
+        fun restore(bitmap: Bitmap) {
             val data = ByteArray(rect.width() * rect.height() * 4)
             DataInputStream(InflaterInputStream(ByteArrayInputStream(bytes))).use { it.readFully(data) }
             val pixels = IntArray(data.size / 4)
             ByteBuffer.wrap(data).asIntBuffer().get(pixels)
-            document.layer.setPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
+            bitmap.setPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
         }
     }
     private data class Change(val before: Patch, val after: Patch)
-    private data class Entry(val documentId: String, val layerId: String, val label: String, val changes: List<Change>) {
-        val bytes: Long get() = changes.sumOf { it.before.bytes.size.toLong() + it.after.bytes.size + 128 }
-        fun restore(document: DrawingDocument, redo: Boolean) {
-            check(document.id == documentId && document.layerId == layerId) { "History belongs to another document/layer" }
-            changes.forEach { if (redo) it.after.restore(document) else it.before.restore(document) }
+    private interface Entry {
+        val label: String
+        val bytes: Long
+        fun restore(document: DrawingDocument, redo: Boolean)
+    }
+    private data class PixelEntry(val documentId: String, val layerId: String, override val label: String, val changes: List<Change>) : Entry {
+        override val bytes: Long get() = changes.sumOf { it.before.bytes.size.toLong() + it.after.bytes.size + 128 }
+        override fun restore(document: DrawingDocument, redo: Boolean) {
+            check(document.id == documentId) { "History belongs to another document" }
+            val layer = checkNotNull(document.findLayer(layerId)) { "History layer is missing" }
+            changes.forEach { if (redo) it.after.restore(layer.bitmap) else it.before.restore(layer.bitmap) }
+            document.selectLayer(layerId)
+            document.invalidateComposite(changes.map { it.before.rect })
+        }
+    }
+    private data class StackEntry(val documentId: String, override val label: String,
+        val before: LayerStackState, val after: LayerStackState,
+        val oldPixels: Map<String, List<Patch>>, val newPixels: Map<String, List<Patch>>) : Entry {
+        override val bytes: Long get() = (oldPixels.values + newPixels.values).sumOf { patches ->
+            patches.sumOf { it.bytes.size.toLong() + 64 }
+        } + (before.layers.size + after.layers.size) * 256L
+        override fun restore(document: DrawingDocument, redo: Boolean) {
+            check(document.id == documentId)
+            document.restoreStack(if (redo) after else before)
+            (if (redo) newPixels else oldPixels).forEach { (id, patches) ->
+                val bitmap = checkNotNull(document.findLayer(id)).bitmap
+                patches.forEach { it.restore(bitmap) }
+            }
+            document.invalidateComposite()
         }
     }
     private val entries = mutableListOf<Entry>()
@@ -79,6 +104,7 @@ class EditHistory(
     fun clear() { entries.clear(); cursor = 0; bytesUsed = 0 }
 
     fun execute(document: DrawingDocument, edit: DocumentEdit): Boolean {
+        check(document.canPaint) { "Selected layer is locked or hidden" }
         val bounds = Rect(0, 0, document.spec.width, document.spec.height)
         val tiles = linkedSetOf<Pair<Int, Int>>()
         edit.affectedRegions(document.spec).forEach { region ->
@@ -88,26 +114,75 @@ class EditHistory(
                     for (x in clipped.left / TILE until (clipped.right + TILE - 1) / TILE) tiles += x to y
             }
         }
-        val before = tiles.map { (x, y) -> capture(document, Rect(x * TILE, y * TILE,
+        val layerId = document.layerId
+        val before = tiles.map { (x, y) -> capture(document.layer, Rect(x * TILE, y * TILE,
             min((x + 1) * TILE, bounds.right), min((y + 1) * TILE, bounds.bottom))) }
         val changes = try {
             edit.apply(document)
             before.mapNotNull { old ->
-                val after = capture(document, old.rect)
+                val after = capture(document.layer, old.rect)
                 if (old.bytes.contentEquals(after.bytes)) null else Change(old, after)
             }
         } catch (error: Exception) {
-            before.forEach { it.restore(document) }
+            before.forEach { it.restore(document.layer) }
+            document.invalidateComposite(before.map { it.rect })
             throw error
         }
         if (changes.isEmpty()) return false
+        document.invalidateComposite(changes.map { it.before.rect })
+        append(PixelEntry(document.id, layerId, edit.label, changes))
+        return true
+    }
+
+    fun executeLayer(document: DrawingDocument, command: LayerCommand): Boolean {
+        val before = document.stackState()
+        val affected = command.affectedPixels(document)
+        val oldPixels = captureLayers(document, affected, maxBytes)
+        try { command.apply(document) }
+        catch (error: Exception) {
+            // Commands validate/allocate before mutation. Restore retained pixels if needed.
+            if (oldPixels != null && document.stackState() != before) {
+                document.restoreStack(before)
+                oldPixels.forEach { (id, patches) -> patches.forEach { it.restore(checkNotNull(document.findLayer(id)).bitmap) } }
+            }
+            document.invalidateComposite()
+            throw error
+        }
+        val after = document.stackState()
+        if (before == after) return false
+        // Added layers are known transparent; redo can allocate them without pixel backups.
+        val inserted = if (command == LayerCommand.Add) emptySet()
+            else after.layers.map { it.id }.toSet() - before.layers.map { it.id }.toSet()
+        val oldBytes = oldPixels?.values?.sumOf { patches -> patches.sumOf { it.bytes.size.toLong() + 64 } } ?: maxBytes
+        val newPixels = captureLayers(document, (affected + inserted).filter { document.findLayer(it) != null }.toSet(), maxBytes - oldBytes)
+        if (oldPixels == null || newPixels == null) clear()
+        else append(StackEntry(document.id, command.label, before, after, oldPixels, newPixels))
+        return true
+    }
+
+    private fun append(entry: Entry) {
         while (entries.size > cursor) bytesUsed -= entries.removeAt(entries.lastIndex).bytes
-        val entry = Entry(document.id, document.layerId, edit.label, changes)
         entries += entry; cursor++; bytesUsed += entry.bytes
         while (entries.size > capacity || bytesUsed > maxBytes) {
             bytesUsed -= entries.removeAt(0).bytes; cursor--
         }
-        return true
+    }
+
+    private fun captureLayers(document: DrawingDocument, ids: Set<String>, budget: Long): Map<String, List<Patch>>? {
+        var used = 0L
+        val result = mutableMapOf<String, List<Patch>>()
+        for (id in ids) {
+            val bitmap = checkNotNull(document.findLayer(id)).bitmap
+            val patches = mutableListOf<Patch>()
+            for (y in 0 until bitmap.height step TILE) for (x in 0 until bitmap.width step TILE) {
+                val patch = capture(bitmap, Rect(x, y, min(x + TILE, bitmap.width), min(y + TILE, bitmap.height)))
+                used += patch.bytes.size + 64
+                if (used > budget) return null
+                patches += patch
+            }
+            result[id] = patches
+        }
+        return result
     }
 
     fun undo(document: DrawingDocument): String? {
@@ -124,9 +199,9 @@ class EditHistory(
         return entry.label
     }
 
-    private fun capture(document: DrawingDocument, rect: Rect): Patch {
+    private fun capture(bitmap: Bitmap, rect: Rect): Patch {
         val pixels = IntArray(rect.width() * rect.height())
-        document.layer.getPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
+        bitmap.getPixels(pixels, 0, rect.width(), rect.left, rect.top, rect.width(), rect.height())
         val raw = ByteBuffer.allocate(pixels.size * 4).apply { asIntBuffer().put(pixels) }.array()
         val compressed = ByteArrayOutputStream()
         val deflater = Deflater(Deflater.BEST_SPEED)

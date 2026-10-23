@@ -31,6 +31,9 @@ class RasterSurface(
     val isDrawing: Boolean get() = activePointer != -1 || rawStroke
     private var pressureRange = PressureRange.ANDROID_DEFAULT
     private var strokeTransform = ViewTransform(1f, 0f, 0f)
+    private var strokeLayerId: String? = null
+    val canDraw: Boolean get() = document?.canPaint == true
+    var layersChanged: (() -> Unit)? = null
     private var framePending = false
     private val frame = Runnable { framePending = false; render() }
     private val paper = Paint().apply { color = Color.WHITE }
@@ -109,7 +112,7 @@ class RasterSurface(
         redo = { if (!redo()) historyFeedback?.invoke("Nothing to redo") },
         trace = { Log.d("BooxProbe", it) })
 
-    init { holder.addCallback(this) }
+    init { tag = "Drawing surface"; holder.addCallback(this) }
 
     override fun surfaceCreated(holder: SurfaceHolder) = render()
     override fun surfaceDestroyed(holder: SurfaceHolder) { historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke() }
@@ -121,6 +124,7 @@ class RasterSurface(
         try {
             val loaded = if (document == null) store.loadOrCreate(defaultSpec) else null
             if (loaded != null) document = loaded.document
+            if (loaded != null) layersChanged?.invoke()
             viewport.resize(checkNotNull(document).spec, width, height, loaded?.viewport)
             render()
             ready?.invoke()
@@ -134,6 +138,7 @@ class RasterSurface(
 
     fun createDocument(spec: CanvasSpec) {
         check(!isDrawing && !isNavigating) { "Finish drawing or navigation before creating a canvas." }
+        document?.releaseComposite()
         val replacement = DrawingDocument.create(spec)
         try { store.save(replacement, null) } catch (failure: Throwable) { replacement.recycle(); throw failure }
         viewportWillChange?.invoke()
@@ -142,6 +147,7 @@ class RasterSurface(
         history.clear(); historyChanged?.invoke()
         document?.recycle()
         document = replacement
+        layersChanged?.invoke()
         loadFailed = false
         viewport.resize(spec, viewport.viewWidth.coerceAtLeast(1), viewport.viewHeight.coerceAtLeast(1),
             ViewportState(1f, spec.width / 2f, spec.height / 2f, true))
@@ -171,8 +177,10 @@ class RasterSurface(
     fun endRawStroke() { rawStroke = false }
 
     /** Samples committed here are always in document pixels. */
-    fun commit(samples: List<PenSample>, source: String, range: PressureRange = PressureRange.ANDROID_DEFAULT) {
+    fun commit(samples: List<PenSample>, source: String, range: PressureRange = PressureRange.ANDROID_DEFAULT,
+        expectedLayerId: String? = null) {
         val current = document ?: return
+        if (!current.canPaint || (expectedLayerId != null && current.layerId != expectedLayerId)) { render(); return }
         val valid = samples.filter { it.x.isFinite() && it.y.isFinite() }
         if (valid.isEmpty()) return
         historyTaps.cancel()
@@ -180,6 +188,38 @@ class RasterSurface(
         historyChanged?.invoke()
         render()
         strokeFinished(PenStroke(valid, source, range))
+    }
+
+    fun selectLayer(id: String): Boolean {
+        val current = document ?: return false
+        if (isDrawing || isNavigating) return false
+        if (current.layerId == id) return true
+        viewportWillChange?.invoke(); historyTaps.cancel(); cancelStroke()
+        current.selectLayer(id)
+        render(); layersChanged?.invoke(); ready?.invoke()
+        return true
+    }
+
+    fun applyLayerCommand(command: LayerCommand): Boolean {
+        val current = document ?: return false
+        if (isDrawing || isNavigating) return false
+        viewportWillChange?.invoke(); historyTaps.cancel(); cancelStroke()
+        try { history.executeLayer(current, command) }
+        finally {
+            render(); historyChanged?.invoke(); layersChanged?.invoke(); ready?.invoke()
+        }
+        return true
+    }
+
+    fun preparePanelResize(): Boolean {
+        if (isDrawing || isNavigating) return false
+        historyTaps.cancel(); viewportWillChange?.invoke()
+        return true
+    }
+
+    fun dispose() {
+        inputEnabled = false; cancelStroke(); history.clear()
+        document?.recycle(); document = null
     }
 
     fun cancelStroke() {
@@ -190,6 +230,8 @@ class RasterSurface(
     }
 
     fun clear() {
+        if (document?.activeLayer?.alphaLocked == true) { historyFeedback?.invoke("Turn off alpha lock before clearing"); return }
+        if (!canDraw) { historyFeedback?.invoke("Selected layer is locked or hidden"); return }
         historyTaps.cancel()
         cancelStroke()
         document?.let { history.execute(it, ClearLayerEdit) }
@@ -207,7 +249,7 @@ class RasterSurface(
         historyTaps.cancel()
         viewportWillChange?.invoke()
         val label = if (redo) history.redo(current) else history.undo(current)
-        render(); historyChanged?.invoke(); ready?.invoke()
+        render(); historyChanged?.invoke(); layersChanged?.invoke(); ready?.invoke()
         historyFeedback?.invoke("${if (redo) "Redo" else "Undo"}: $label")
         return true
     }
@@ -238,8 +280,11 @@ class RasterSurface(
                 canvas.concat(transform.matrix())
                 canvas.drawRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat(), paper)
                 canvas.clipRect(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat())
-                canvas.drawBitmap(current.layer, 0f, 0f, bitmapPaint)
-                brush.draw(canvas, pending)
+                if (pending.isEmpty()) current.drawComposite(canvas, bitmapPaint)
+                else current.layers.forEach { layer ->
+                    current.drawLayer(canvas, layer, bitmapPaint,
+                        if (layer.id == strokeLayerId) ({ target -> brush.draw(target, pending, layer.alphaLocked) }) else null)
+                }
             } finally { canvas.restoreToCount(saved) }
         } finally { holder.unlockCanvasAndPost(canvas) }
     }
@@ -252,7 +297,7 @@ class RasterSurface(
         if (!inputEnabled || document == null) return true
         if (historyTaps.onTouchEvent(event)) { gestures.cancel(); return true }
         if (gestures.onTouchEvent(event)) return true
-        if (rawInput || isNavigating) return true
+        if (rawInput || isNavigating || !canDraw) return true
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_CANCEL) { cancelStroke(); return true }
         val actionIndex = event.actionIndex
@@ -263,6 +308,7 @@ class RasterSurface(
                 if (!viewport.containsViewPoint(event.getX(actionIndex), event.getY(actionIndex))) return true
                 activePointer = event.getPointerId(actionIndex)
                 strokeTransform = viewport.transform
+                strokeLayerId = document?.layerId
                 val axis = event.device?.getMotionRange(MotionEvent.AXIS_PRESSURE, event.source)
                 pressureRange = if (axis != null && axis.min.isFinite() && axis.max.isFinite() && axis.max > axis.min)
                     PressureRange(axis.min, axis.max, "android-motion-range") else PressureRange.ANDROID_DEFAULT
@@ -287,7 +333,7 @@ class RasterSurface(
             val samples = pending.toList()
             pending.clear(); activePointer = -1
             removeCallbacks(frame); framePending = false
-            commit(samples, "android", pressureRange)
+            commit(samples, "android", pressureRange, strokeLayerId)
             performClick()
         } else requestFrame()
         return true
