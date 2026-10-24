@@ -28,7 +28,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         close()
         if (!view.canDraw) return false
         if (!NativePreviewPolicy.supports(view.brush, view.document, view.viewport.transform.scale)) {
-            Log.i("BooxProbe", "App brush preview: firmware shader workaround colorArgb=${Integer.toHexString(view.brush.inkColor)} maxDocumentWidth=${view.brush.maxRenderedWidth}")
+            Log.i("BooxProbe", "App brush preview: firmware shader workaround colorArgb=${Integer.toHexString(view.brush.inkColor)} finalMaxWidth=${view.brush.maxRenderedWidth} nativeMaxWidth=${view.brush.nativePreviewMaxWidth}")
             status(if (view.brush.isEraser) "App eraser · needs ≤30px at this zoom, one full-opacity layer, alpha lock off"
                 else "App preview · gray or wide brush")
             return false
@@ -109,16 +109,16 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             "Brush is outside the native preview policy"
         }
         val started = StrokePerformance.now()
-        val width = view.brush.maxWidth * view.viewport.transform.scale
+        val width = view.brush.nativePreviewBaseWidth * view.viewport.transform.scale
         // Explicitly enable the reader on first open; the SDK call is a no-op when
         // already enabled at handoff. Shader parameters are set with rendering paused.
         NativePreviewConfiguration.apply(width, color,
             rendering = { target.setRawDrawingRenderEnabled(it) },
             setColor = { target.setStrokeColor(it) }, setWidth = { target.setStrokeWidth(it) },
-            setPencil = { target.setStrokeStyle(view.brush.booxFamily?.previewStyle ?: TouchHelper.STROKE_STYLE_PENCIL) },
+            setPencil = { target.setStrokeStyle(view.brush.nativePreviewStyle) },
             enableInput = { target.setRawInputReaderEnable(true) })
         StrokePerformance.log("nativeResume handoff=$handoff configuredWhilePaused=true totalMs=${StrokePerformance.ms(started)}")
-        Log.d("BooxProbe", "Hardware preview: style=${view.brush.booxFamily?.label ?: "pencil"} styleId=${view.brush.booxFamily?.previewStyle ?: TouchHelper.STROKE_STYLE_PENCIL} appWidth=${view.brush.hasDynamicWidth} baseViewWidth=$width zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
+        Log.d("BooxProbe", "Hardware preview: style=${view.brush.booxFamily?.label ?: "pencil"} styleId=${view.brush.nativePreviewStyle} appWidth=${view.brush.hasDynamicWidth} baseViewWidth=$width finalBaseWidth=${view.brush.maxWidth} nativeMaxWidth=${view.brush.nativePreviewMaxWidth} zoom=${view.viewport.transform.scale} requestedColorArgb=${Integer.toHexString(color)} operation=${if (view.brush.isEraser) "erase" else "paint"}")
     }
 
     private fun callback(session: Int, range: PressureRange, transform: ViewTransform, layerId: String): RawInputCallback {

@@ -110,8 +110,11 @@ object BrushChecks {
                     check(dryControls.findViewWithTag<CheckBox>("Brush tilt").isChecked)
                     dryControls.findViewWithTag<CheckBox>("Brush tilt").isChecked = false
                     dryControls.findViewWithTag<CheckBox>("Brush pressure").isChecked = false
+                    dryControls.findViewWithTag<android.widget.SeekBar>("Brush preview width").progress = 10
+                    dryControls.findViewWithTag<android.widget.RadioButton>("Brush preview texture coarse").performClick()
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-                    check(applied == settings.copy(tilt = false, pressure = false))
+                    check(applied == settings.copy(tilt = false, pressure = false,
+                        nativePreviewScale = 0.35f, nativePreviewTexture = NativePreviewTexture.COARSE))
                 }
             } catch (error: Throwable) { failure = error }
             finally { dialog?.dismiss(); activity.finish() }

@@ -58,7 +58,7 @@ object MarkerChecks {
             check(store.selected() == BrushPreset.MONOLINE && store.load(BrushPreset.MONOLINE).size == 12f)
             check(store.load(BrushPreset.MONOLINE).shade == InkShade.BLACK)
             store.save(defaults.copy(size = 96f, shade = InkShade.LIGHT))
-            check(prefs.getInt("brush_schema", 0) == 2)
+            check(prefs.getInt("brush_schema", 0) == 3)
             check(BrushSettingsStore(isolated).load(BrushPreset.MONOLINE) == defaults.copy(size = 96f, shade = InkShade.LIGHT))
             check(store.load(BrushPreset.INK).shade == InkShade.LIGHT) { "Changing tool lost the ink shade" }
             prefs.edit().putInt("ink_gray_level", 999).putFloat("brush_monoline_size", 129f).commit()

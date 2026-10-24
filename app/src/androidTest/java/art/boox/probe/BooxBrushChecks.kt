@@ -9,9 +9,10 @@ import java.io.File
 object BooxBrushChecks {
     fun run(context: Context) {
         if (!BuildConfig.BOOX_LAB) return
+        NativePreviewCalibrationChecks.run(context)
         check(BooxBrushFamily.PENCIL.previewStyle == com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_CHARCOAL_V2)
         check(!BrushPreset.LAB_PENCIL.defaults().compile().hasDynamicWidth) { "Textured firmware received a second pressure curve" }
-        check(BooxBrushFamily.CHARCOAL.previewStyle == com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_CHARCOAL)
+        check(BrushPreset.LAB_CHARCOAL.defaults().compile().nativePreviewStyle == com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_CHARCOAL_V2)
         checkFamily(context, BrushPreset.LAB_BRUSH)
         if (BuildConfig.RENDERER_BACKEND == "recovered") {
             checkFamily(context, BrushPreset.LAB_PENCIL)
@@ -139,7 +140,8 @@ object BooxBrushChecks {
             flat.eraseColor(Color.TRANSPARENT)
             brush.draw(Canvas(flat), listOf(dot.copy(tiltRadians = Float.NaN)))
             check(up.sameAs(flat)) { "Missing/invalid tilt changed shading" }
-            check(!NativePreviewPolicy.supports(settings.copy(size = 13f).compile()))
+            check(NativePreviewPolicy.supports(settings.copy(size = 13.3f).compile()))
+            check(!NativePreviewPolicy.supports(settings.copy(size = 25f).compile()))
             check(NativePreviewPolicy.supports(settings.copy(size = 13f, tilt = false).compile()))
             val sample = dot.copy(rawTiltX = 45, rawTiltY = 0)
             val mapped = ViewTransform(1f, 0f, 0f, 90f).map(sample)

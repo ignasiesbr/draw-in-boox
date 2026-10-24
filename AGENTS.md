@@ -19,8 +19,11 @@ The official-SDK alternative is documented separately in
 
 Native crash guard: read [docs/NATIVE_PREVIEW_SAFETY.md](docs/NATIVE_PREVIEW_SAFETY.md)
 before changing native preview policy. A gray/wide Marker caused a SurfaceFlinger
-allocator-race abort on this firmware. Gray or >30px declared-footprint brushes
-now use app-rendered live ink. Do not bypass this policy based on synthetic tests.
+allocator-race abort on this firmware. Gray or >30px declared native-preview
+footprints use app-rendered live ink. Dry-brush preview fitting can use a smaller
+native base independently of final size; its envelope remains base*2.5 <=30px
+(configured base <=12px). See docs/NATIVE_PREVIEW_CALIBRATION.md. Do not bypass
+this policy based on synthetic tests.
 Configure native parameters while drawing is paused, and never send contact-time
 width setters for a constant brush. The black/narrow native path retains the
 accepted pressure/tilt behavior and asynchronous handoff architecture below.

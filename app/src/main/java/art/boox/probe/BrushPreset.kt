@@ -25,10 +25,13 @@ enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val 
 
 /** Serializable settings; no renderer resources or mutable stroke state. */
 data class BrushSettings(val presetId: String = "tilt", val size: Float = 12f,
-    val pressure: Boolean = true, val tilt: Boolean = true, val shade: InkShade = InkShade.BLACK) {
+    val pressure: Boolean = true, val tilt: Boolean = true, val shade: InkShade = InkShade.BLACK,
+    val nativePreviewScale: Float = if (BrushPreset.fromId(presetId).booxFamily?.dry == true) 0.5f else 1f,
+    val nativePreviewTexture: NativePreviewTexture = NativePreviewTexture.FINE) {
     init {
         require(BrushPreset.entries.any { it.id == presetId })
         require(size.isFinite() && size in 1f..preset.maxSize)
+        require(nativePreviewScale.isFinite() && nativePreviewScale in 0.25f..1f)
     }
     val preset get() = BrushPreset.fromId(presetId)
     fun compile() = PressureBrush(if (pressure && preset != BrushPreset.ERASER) 1f else size, size,
@@ -42,18 +45,23 @@ class BrushSettingsStore(context: Context) {
         .takeIf { it in BrushPreset.available } ?: BrushPreset.TILT
     fun load(preset: BrushPreset): BrushSettings {
         val defaults = preset.defaults()
-        if (preferences.getInt("brush_schema", 1) !in 1..2) return defaults
+        if (preferences.getInt("brush_schema", 1) !in 1..3) return defaults
         val size = preferences.getFloat("brush_${preset.id}_size", defaults.size)
+        val previewScale = preferences.getFloat("brush_${preset.id}_native_scale", defaults.nativePreviewScale)
         return defaults.copy(size = if (size.isFinite() && size in 1f..preset.maxSize) size else defaults.size,
             pressure = preset != BrushPreset.ERASER && preferences.getBoolean("brush_${preset.id}_pressure", defaults.pressure),
             tilt = preset != BrushPreset.ERASER && preferences.getBoolean("brush_${preset.id}_tilt", defaults.tilt),
-            shade = InkShade.fromLevel(preferences.getInt("ink_gray_level", 0)))
+            shade = InkShade.fromLevel(preferences.getInt("ink_gray_level", 0)),
+            nativePreviewScale = previewScale.takeIf { it.isFinite() && it in 0.25f..1f } ?: defaults.nativePreviewScale,
+            nativePreviewTexture = NativePreviewTexture.fromId(preferences.getString("brush_${preset.id}_native_texture", null)))
     }
     fun save(settings: BrushSettings) {
-        preferences.edit().putInt("brush_schema", 2).putString("brush_selected", settings.presetId)
+        preferences.edit().putInt("brush_schema", 3).putString("brush_selected", settings.presetId)
             .putFloat("brush_${settings.presetId}_size", settings.size)
             .putBoolean("brush_${settings.presetId}_pressure", settings.pressure)
             .putBoolean("brush_${settings.presetId}_tilt", settings.tilt)
+            .putFloat("brush_${settings.presetId}_native_scale", settings.nativePreviewScale)
+            .putString("brush_${settings.presetId}_native_texture", settings.nativePreviewTexture.id)
             .putInt("ink_gray_level", settings.shade.level).apply()
     }
 }

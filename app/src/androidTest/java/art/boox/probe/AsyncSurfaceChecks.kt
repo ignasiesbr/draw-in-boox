@@ -114,6 +114,14 @@ object AsyncSurfaceChecks {
                             surface.selectBrush(preset.defaults())
                             check(native.open() && surface.rawInput) { "Native ${preset.label} style did not open" }
                             native.close()
+                            if (preset.booxFamily?.dry == true) {
+                                surface.selectBrush(preset.defaults().copy(size = 13.3f))
+                                check(native.open() && surface.rawInput) { "Calibrated 13.3px ${preset.label} did not enable BOOX input" }
+                                native.close()
+                                surface.selectBrush(preset.defaults().copy(size = 13.3f, nativePreviewTexture = NativePreviewTexture.COARSE))
+                                check(native.open() && surface.rawInput) { "Coarse ${preset.label} preview did not reopen" }
+                                native.close()
+                            }
                         }
                         surface.selectBrush(BrushPreset.INK.defaults())
                     }

@@ -15,7 +15,7 @@ object NativePreviewPolicy {
             val layer = document?.layers?.singleOrNull() ?: return null
             return if (document.canPaint && !layer.alphaLocked && layer.opacity == 100) Color.WHITE else null
         }
-        return if (brush.inkColor == Color.BLACK && brush.maxRenderedWidth <= MAX_DOCUMENT_WIDTH) Color.BLACK else null
+        return if (brush.inkColor == Color.BLACK && brush.nativePreviewMaxWidth <= MAX_DOCUMENT_WIDTH) Color.BLACK else null
     }
     fun supports(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f) =
         color(brush, document, scale) != null

@@ -172,7 +172,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=brush-perf-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=preview-fit-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -290,6 +290,9 @@ class MainActivity : Activity() {
             .put("mode", if (surface.rawInput) "boox" else "android")
             .put("nativePreviewSupported", NativePreviewPolicy.supports(surface.brush, document, surface.viewport.transform.scale))
             .put("nativePreviewColorArgb", NativePreviewPolicy.color(surface.brush, document, surface.viewport.transform.scale) ?: JSONObject.NULL)
+            .put("nativePreviewBaseWidthPx", surface.brush.nativePreviewBaseWidth)
+            .put("nativePreviewMaxWidthPx", surface.brush.nativePreviewMaxWidth)
+            .put("nativePreviewStyle", surface.brush.nativePreviewStyle)
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
             .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
@@ -411,7 +414,11 @@ class MainActivity : Activity() {
             .put("maxRenderedWidthPx", captured.maxRenderedWidth)
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
-            .put("settingsVersion", 2).put("preview", if (source == "boox") {
+            .put("settingsVersion", 3).put("nativePreviewScale", captured.settings?.nativePreviewScale ?: 1f)
+            .put("nativePreviewTexture", captured.settings?.nativePreviewTexture?.id ?: JSONObject.NULL)
+            .put("nativePreviewBaseWidthPx", captured.nativePreviewBaseWidth)
+            .put("nativePreviewMaxWidthPx", captured.nativePreviewMaxWidth)
+            .put("nativePreviewStyle", captured.nativePreviewStyle).put("preview", if (source == "boox") {
                 if (captured.isEraser) "native-white-eraser" else if (captured.usesBooxEngine) "native-${captured.booxFamily!!.label.lowercase()}" else "native-round-width"
             } else if (captured.usesBooxEngine) "app-${captured.booxFamily!!.label.lowercase()}" else "app-round-brush")
             .put("operation", if (captured.isEraser) "erase" else "paint")

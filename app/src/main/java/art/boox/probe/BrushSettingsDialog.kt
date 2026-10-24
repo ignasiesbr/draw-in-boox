@@ -52,11 +52,39 @@ object BrushSettingsDialog {
             if (!sizeOnly && !eraser && (!fountain || dry)) content.addView(this)
         }
         val shade = if (sizeOnly || eraser) null else InkShadePicker(context, initial.shade).also { content.addView(it) }
+        val nativeWidthLabel = if (dry && !sizeOnly) label("") else null
+        val nativeWidth = if (dry && !sizeOnly) SeekBar(context).apply {
+            tag = "Brush preview width"; contentDescription = "Fast preview thickness"
+            max = 75; progress = (initial.nativePreviewScale * 100f).toInt() - 25
+            minimumHeight = dp(48)
+            progressDrawable = GradientDrawable().apply { setColor(Color.BLACK); setSize(dp(120), dp(4)) }
+            thumb = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE)
+                setStroke(dp(2), Color.BLACK); setSize(dp(24), dp(24)) }
+            content.addView(this)
+        } else null
+        val nativeTexture = if (dry && !sizeOnly) {
+            label("Fast preview texture")
+            RadioGroup(context).apply {
+                orientation = RadioGroup.HORIZONTAL; tag = "Brush preview texture"
+                NativePreviewTexture.entries.forEach { texture ->
+                    addView(RadioButton(context).apply {
+                        id = View.generateViewId(); tag = "Brush preview texture ${texture.id}"
+                        text = texture.label; setTextColor(Color.BLACK); minHeight = dp(48)
+                        isChecked = texture == initial.nativePreviewTexture
+                    })
+                }
+                content.addView(this)
+            }
+        } else null
         val explanation = label("")
         fun draft(): BrushSettings? = size.text.toString().toFloatOrNull()?.takeIf {
             it.isFinite() && it in 1f..maximum
         }?.let { initial.copy(size = it, pressure = pressure.isChecked, tilt = tilt.isChecked,
-            shade = shade?.selected ?: initial.shade) }
+            shade = shade?.selected ?: initial.shade,
+            nativePreviewScale = nativeWidth?.let { bar -> (25 + bar.progress) / 100f } ?: initial.nativePreviewScale,
+            nativePreviewTexture = NativePreviewTexture.entries.firstOrNull { texture ->
+                nativeTexture?.findViewWithTag<RadioButton>("Brush preview texture ${texture.id}")?.isChecked == true
+            } ?: initial.nativePreviewTexture) }
         val preview = object : View(context) {
             private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK; textSize = dp(14).toFloat() }
             override fun onDraw(canvas: Canvas) {
@@ -86,11 +114,16 @@ object BrushSettingsDialog {
         }
         content.addView(preview, LinearLayout.LayoutParams(-1, dp(100)))
         fun update() {
+            nativeWidthLabel?.text = "Fast preview thickness: ${25 + (nativeWidth?.progress ?: 25)}%"
             val settings = draft()
             explanation.text = settings?.let {
                 val brush = it.compile()
                 if (eraser) "Erases the selected layer. Alpha lock must be off. Native preview: up to 30px at this zoom on one full-opacity layer."
-                else if (dry) "Pressure changes width and darkness. Tilt broadens the tip for side shading. BOOX feedback approximates texture; gray or wider than 30px uses app preview."
+                else if (dry) "Preview thickness and texture change only live feedback. " +
+                    (if (NativePreviewPolicy.supports(brush)) "Fast BOOX preview is available at this size. "
+                    else if (it.shade != InkShade.BLACK) "Gray uses app preview. "
+                    else "Reduce preview thickness for fast BOOX preview at this size. ") +
+                    "The final stroke is unchanged. Native texture and darkness can still differ."
                 else if (fountain) "Experimental BOOX ${initial.preset.booxFamily!!.label} response. Compare stroke shape before and after lifting."
                 else "Width ${brush.minWidth}–${brush.maxWidth} px; maximum with tilt ${brush.maxRenderedWidth} px"
             } ?: "Enter a size from $range."
@@ -114,6 +147,12 @@ object BrushSettingsDialog {
         pressure.setOnCheckedChangeListener { _, _ -> update() }
         tilt.setOnCheckedChangeListener { _, _ -> update() }
         shade?.onChanged = { update() }
+        nativeWidth?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) { update() }
+            override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+        })
+        nativeTexture?.setOnCheckedChangeListener { _, _ -> update() }
         update()
         val dialog = AlertDialog.Builder(context).setTitle("${initial.preset.label} ${if (sizeOnly) "size" else "settings"}")
             .setView(ScrollView(context).apply { addView(content) })

@@ -63,6 +63,14 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
 
     val maxRenderedWidth: Float get() = if (booxFamily?.dry == true) maxWidth * widthModifier.maxMultiplier
         else booxFamily?.maximumWidth(maxWidth) ?: (maxWidth * widthModifier.maxMultiplier)
+    val nativePreviewBaseWidth: Float get() = if (booxFamily?.dry == true)
+        maxWidth * (settings?.nativePreviewScale ?: 0.5f) else maxWidth
+    // Firmware owns dry-brush dynamics even if app pressure/tilt controls are off.
+    // Bound its configured footprint independently from the final app geometry.
+    val nativePreviewMaxWidth: Float get() = if (booxFamily?.dry == true) nativePreviewBaseWidth * 2.5f else maxRenderedWidth
+    val nativePreviewStyle: Int get() = if (booxFamily?.dry == true)
+        (settings?.nativePreviewTexture ?: NativePreviewTexture.FINE).style
+        else booxFamily?.previewStyle ?: com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_PENCIL
     val hasDynamicWidth: Boolean get() = (!usesBooxEngine || booxFamily?.appPreviewWidth == true) &&
         (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
     fun width(sample: PenSample): Float = (if (booxFamily?.dry == true)
