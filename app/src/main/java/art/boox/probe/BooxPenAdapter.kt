@@ -29,7 +29,10 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
         if (!view.canDraw) return false
         if (!NativePreviewPolicy.supports(view.brush, view.document, view.viewport.transform.scale)) {
             Log.i("BooxProbe", "App brush preview: firmware shader workaround colorArgb=${Integer.toHexString(view.brush.inkColor)} finalMaxWidth=${view.brush.maxRenderedWidth} nativeMaxWidth=${view.brush.nativePreviewMaxWidth}")
-            status(if (view.brush.isEraser) "App eraser · needs ≤30px at this zoom, one full-opacity layer, alpha lock off"
+            status(if (view.brush.isEraser) {
+                if (NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) "App eraser · needs ≤30px at this zoom, one full-opacity layer, alpha lock off"
+                else "App eraser · needs one full-opacity layer, alpha lock off"
+            }
                 else "App preview · gray or wide brush")
             return false
         }

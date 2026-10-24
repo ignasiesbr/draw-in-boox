@@ -1,5 +1,18 @@
 # Research and handoff
 
+Preview fitting (2026-10-24): user reports dry previews too thick, Charcoal too
+light; Fountain and Brush work well. Preserve final artwork and prefer BOOX input.
+Header/log is preview fit v1 / preview-fit-v1. Pencil/Charcoal add preview-only
+25-100% thickness (default 50%) and Fine/Coarse texture choices. A 13.3px final
+brush now configures 6.65px native base and remains BOOX. The native envelope cap
+is still 30px, configured base <=12px. Final-pixel equality and real SDK 13.3px
+open/reopen checks pass; physical fitting still needs comparison.
+User also requested NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD: default true,
+false plus rebuild bypasses gray/wide crash limits, retaining eraser correctness
+and input/handoff lifecycle rules. Both policy modes are tested without enabling
+unsafe gray/wide SDK sessions. Full default-guard Go103 suite passes. See
+NATIVE_PREVIEW_CALIBRATION.md for migration, known tone limits and switch details.
+
 Performance follow-up after checkpoint `663eb14`: header/log `brush perf v1` /
 `brush-perf-v1`. Upright full cache seeds copy visible document pixels only; idle
 native close preserves an acknowledged cache. Pending frames and actual view/

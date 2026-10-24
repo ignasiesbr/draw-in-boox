@@ -23,7 +23,11 @@ allocator-race abort on this firmware. Gray or >30px declared native-preview
 footprints use app-rendered live ink. Dry-brush preview fitting can use a smaller
 native base independently of final size; its envelope remains base*2.5 <=30px
 (configured base <=12px). See docs/NATIVE_PREVIEW_CALIBRATION.md. Do not bypass
-this policy based on synthetic tests.
+this policy based on synthetic tests. User explicitly requested a code-wide switch
+for future reproduction work: NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD
+defaults true; false bypasses crash-related width/color limits after rebuilding.
+Do not silently flip it while fixing unrelated issues. Guard-off does not remove
+eraser correctness rules, paused configuration or asynchronous handoff guards.
 Configure native parameters while drawing is paused, and never send contact-time
 width setters for a constant brush. The black/narrow native path retains the
 accepted pressure/tilt behavior and asynchronous handoff architecture below.

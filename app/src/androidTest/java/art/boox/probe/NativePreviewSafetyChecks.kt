@@ -11,6 +11,7 @@ import java.io.File
 
 object NativePreviewSafetyChecks {
     fun run(context: Context) {
+        NativePreviewGuardChecks.run()
         var enabled = true
         val calls = mutableListOf<String>()
         NativePreviewConfiguration.apply(50.4f, Color.BLACK,
@@ -30,16 +31,16 @@ object NativePreviewSafetyChecks {
         }.isFailure)
         check(!enabled && calls == listOf("render:false")) { "Failed setup re-enabled unsafe rendering" }
 
-        check(NativePreviewPolicy.supports(BrushPreset.INK.defaults().compile()))
-        check(NativePreviewPolicy.supports(BrushPreset.TILT.defaults().compile()))
+        check(NativePreviewGuardChecks.guardedSupports(BrushPreset.INK.defaults().compile()))
+        check(NativePreviewGuardChecks.guardedSupports(BrushPreset.TILT.defaults().compile()))
         val marker = BrushPreset.MONOLINE.defaults()
         for (shade in InkShade.entries.filter { it != InkShade.BLACK }) {
-            check(!NativePreviewPolicy.supports(marker.copy(size = 12f, shade = shade).compile()))
-            check(!NativePreviewPolicy.supports(BrushPreset.TILT.defaults().copy(shade = shade).compile()))
+            check(!NativePreviewGuardChecks.guardedSupports(marker.copy(size = 12f, shade = shade).compile()))
+            check(!NativePreviewGuardChecks.guardedSupports(BrushPreset.TILT.defaults().copy(shade = shade).compile()))
         }
-        check(!NativePreviewPolicy.supports(marker.copy(size = 128f).compile()))
+        check(!NativePreviewGuardChecks.guardedSupports(marker.copy(size = 128f).compile()))
         val fixed = marker.copy(size = 12f).compile()
-        check(NativePreviewPolicy.supports(fixed) && !fixed.hasDynamicWidth)
+        check(NativePreviewGuardChecks.guardedSupports(fixed) && !fixed.hasDynamicWidth)
         check(LivePreviewWidth.forBrush(fixed, 0.5f,
             post = { _, _ -> error("Constant brush queued a native shader update") },
             remove = {}, apply = { error("Constant brush changed native width at contact") }) == null)
@@ -51,6 +52,8 @@ object NativePreviewSafetyChecks {
         controller.begin(sample); controller.finish()
         check(sent == dynamic.width(sample) * 2f) { "Accepted dynamic width response changed" }
 
+        // This attached-view test specifically requires guarded Android fallback.
+        if (!NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) return
         val directory = File(context.cacheDir, "native-safety-${System.nanoTime()}")
         val isolated = object : ContextWrapper(context) { override fun getFilesDir() = directory.apply { mkdirs() } }
         val completed = mutableListOf<PenStroke>()

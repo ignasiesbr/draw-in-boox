@@ -35,15 +35,15 @@ object NativePreviewCalibrationChecks {
             val settings = preset.defaults().copy(size = 13.3f)
             val brush = settings.compile()
             check(brush.maxRenderedWidth > 30f && brush.nativePreviewMaxWidth < 30f)
-            check(brush.nativePreviewBaseWidth == 6.65f && NativePreviewPolicy.supports(brush))
+            check(brush.nativePreviewBaseWidth == 6.65f && NativePreviewGuardChecks.guardedSupports(brush))
             check(!brush.hasDynamicWidth)
             for (scale in listOf(0.25f, 0.5f, 1f)) for (size in listOf(1f, 12f, 13.3f, 24f, 25f, 48f, 49f)) {
                 val test = settings.copy(size = size, nativePreviewScale = scale).compile()
-                check(NativePreviewPolicy.supports(test) == (size * scale * 2.5f <= 30f))
-                if (NativePreviewPolicy.supports(test)) check(test.nativePreviewBaseWidth <= 12f)
-                check(!NativePreviewPolicy.supports(settings.copy(size = size, nativePreviewScale = scale, shade = InkShade.NEAR_BLACK).compile()))
+                check(NativePreviewGuardChecks.guardedSupports(test) == (size * scale * 2.5f <= 30f))
+                if (NativePreviewGuardChecks.guardedSupports(test)) check(test.nativePreviewBaseWidth <= 12f)
+                check(!NativePreviewGuardChecks.guardedSupports(settings.copy(size = size, nativePreviewScale = scale, shade = InkShade.NEAR_BLACK).compile()))
             }
-            check(!NativePreviewPolicy.supports(settings.copy(size = 13.3f, nativePreviewScale = 1f, tilt = false).compile()))
+            check(!NativePreviewGuardChecks.guardedSupports(settings.copy(size = 13.3f, nativePreviewScale = 1f, tilt = false).compile()))
             if (BuildConfig.RENDERER_BACKEND == "recovered") {
                 val a = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
                 val b = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888)
@@ -67,6 +67,6 @@ object NativePreviewCalibrationChecks {
             check(a.nativePreviewBaseWidth == a.maxWidth && a.nativePreviewBaseWidth == b.nativePreviewBaseWidth)
             check(a.nativePreviewStyle == b.nativePreviewStyle && a.nativePreviewMaxWidth == b.nativePreviewMaxWidth)
         }
-        check(!NativePreviewPolicy.supports(BrushPreset.MONOLINE.defaults().copy(size = 100.8f, nativePreviewScale = 0.25f).compile()))
+        check(!NativePreviewGuardChecks.guardedSupports(BrushPreset.MONOLINE.defaults().copy(size = 100.8f, nativePreviewScale = 0.25f).compile()))
     }
 }

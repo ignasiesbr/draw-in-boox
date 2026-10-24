@@ -172,7 +172,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=preview-fit-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=preview-fit-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -293,6 +293,7 @@ class MainActivity : Activity() {
             .put("nativePreviewBaseWidthPx", surface.brush.nativePreviewBaseWidth)
             .put("nativePreviewMaxWidthPx", surface.brush.nativePreviewMaxWidth)
             .put("nativePreviewStyle", surface.brush.nativePreviewStyle)
+            .put("firmwareCrashGuardEnabled", NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD)
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
             .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
@@ -331,8 +332,9 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · brush perf v1" else "BOOX Art"
-        documentInfo.text = "$title · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · preview fit v1" else "BOOX Art"
+        val guardLabel = if (NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) "" else " [guard off]"
+        documentInfo.text = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
     private fun zoom(action: ZoomAction) {
@@ -415,6 +417,7 @@ class MainActivity : Activity() {
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
             .put("settingsVersion", 3).put("nativePreviewScale", captured.settings?.nativePreviewScale ?: 1f)
+            .put("firmwareCrashGuardEnabled", NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD)
             .put("nativePreviewTexture", captured.settings?.nativePreviewTexture?.id ?: JSONObject.NULL)
             .put("nativePreviewBaseWidthPx", captured.nativePreviewBaseWidth)
             .put("nativePreviewMaxWidthPx", captured.nativePreviewMaxWidth)

@@ -5,17 +5,25 @@ import android.graphics.Color
 /** Keep the accepted black/narrow path. User-authorized white eraser experiment
  * is restricted to cases where transparency reveals only white paper. */
 object NativePreviewPolicy {
+    /** Set false and rebuild for explicit native gray/wide firmware experiments. */
+    const val ENFORCE_FIRMWARE_CRASH_GUARD = true
     const val MAX_DOCUMENT_WIDTH = 30f
-    fun color(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f): Int? {
+    fun color(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f): Int? =
+        colorWithGuard(ENFORCE_FIRMWARE_CRASH_GUARD, brush, document, scale)
+
+    /** Explicit policy modes let tests cover guard-off without opening unsafe SDK sessions. */
+    internal fun colorWithGuard(enforceCrashGuard: Boolean, brush: PressureBrush,
+        document: DrawingDocument? = null, scale: Float = 1f): Int? {
         if (brush.isEraser) {
-            // Do not expand the gray/wide crash workaround for this experiment.
-            // Bound screen width too: this white shader path is not yet pen-validated.
-            if (!scale.isFinite() || scale <= 0f || brush.maxRenderedWidth > MAX_DOCUMENT_WIDTH ||
-                brush.maxRenderedWidth * scale > MAX_DOCUMENT_WIDTH) return null
+            if (!scale.isFinite() || scale <= 0f) return null
+            if (enforceCrashGuard && (brush.maxRenderedWidth > MAX_DOCUMENT_WIDTH ||
+                brush.maxRenderedWidth * scale > MAX_DOCUMENT_WIDTH)) return null
+            // These restrictions protect erasing semantics in either crash-guard mode.
             val layer = document?.layers?.singleOrNull() ?: return null
             return if (document.canPaint && !layer.alphaLocked && layer.opacity == 100) Color.WHITE else null
         }
-        return if (brush.inkColor == Color.BLACK && brush.nativePreviewMaxWidth <= MAX_DOCUMENT_WIDTH) Color.BLACK else null
+        return if (!enforceCrashGuard || (brush.inkColor == Color.BLACK && brush.nativePreviewMaxWidth <= MAX_DOCUMENT_WIDTH))
+            brush.inkColor else null
     }
     fun supports(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f) =
         color(brush, document, scale) != null

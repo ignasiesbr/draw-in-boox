@@ -1,5 +1,20 @@
 # Native pen renderer crash workaround
 
+2026-10-24 update: the user explicitly requested a code-wide crash-guard switch
+for future reproduction work. `NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD`
+defaults to true. False plus rebuild bypasses native gray/width caps; this is not
+automatically enabled by brush work or by tests. Startup/diagnostic logs record
+the mode, and disabled builds show `[guard off]` in the heading. Eraser correctness
+rules and safe setup/handoff ordering remain. Guard-off policy tests do not open
+gray/wide SDK sessions. The single recorded abort does not establish frequency.
+
+With the guard on, dry-brush fitting now gates its configured native envelope
+separately from final size: preview base*2.5 <=30px, native base <=12px. This lets
+a 13.3px final tool use a smaller native preview without a wider native request.
+See NATIVE_PREVIEW_CALIBRATION.md for fitting controls, physical feedback and
+the exact switch semantics. Earlier width-policy descriptions below are historical
+where they use final width instead of the configured dry-preview envelope.
+
 2026-10-23, safety revision `shader-safe-v2`, retained in `penPipeline=native-eraser-v1`.
 
 ## User-authorized native white eraser experiment

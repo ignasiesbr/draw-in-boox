@@ -1,5 +1,11 @@
 # Stroke responsiveness investigation
 
+Current header/log: `preview fit v1` / `preview-fit-v1`. Native preview-only
+fitting and the explicit firmware crash-guard code switch retain the accepted
+input/presentation and dry raster v2 performance path. See
+NATIVE_PREVIEW_CALIBRATION.md. Default builds enforce the guard; no guard-off
+physical reliability or latency result is claimed.
+
 ## Brush performance follow-up (`brush-perf-v1`)
 
 Checkpoint before optimization: `663eb14` (Pencil textured-preview trial). The user's

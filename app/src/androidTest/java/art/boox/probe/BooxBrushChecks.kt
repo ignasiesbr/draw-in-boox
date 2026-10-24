@@ -87,7 +87,7 @@ object BooxBrushChecks {
                 check(Color.alpha(color) == if (x in 50 until 150) 255 else 0)
                 if (x in 50 until 150 && Color.red(color) > 0) changed = true
             }
-            check(changed && !NativePreviewPolicy.supports(gray))
+            check(changed && !NativePreviewGuardChecks.guardedSupports(gray))
             File(context.cacheDir, "${preset.id}-${BuildConfig.RENDERER_BACKEND}.png").outputStream().use {
                 rendered.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
@@ -141,7 +141,7 @@ object BooxBrushChecks {
             brush.draw(Canvas(flat), listOf(dot.copy(tiltRadians = Float.NaN)))
             check(up.sameAs(flat)) { "Missing/invalid tilt changed shading" }
             check(NativePreviewPolicy.supports(settings.copy(size = 13.3f).compile()))
-            check(!NativePreviewPolicy.supports(settings.copy(size = 25f).compile()))
+            check(!NativePreviewGuardChecks.guardedSupports(settings.copy(size = 25f).compile()))
             check(NativePreviewPolicy.supports(settings.copy(size = 13f, tilt = false).compile()))
             val sample = dot.copy(rawTiltX = 45, rawTiltY = 0)
             val mapped = ViewTransform(1f, 0f, 0f, 90f).map(sample)
