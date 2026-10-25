@@ -12,6 +12,8 @@ import com.onyx.android.sdk.pen.data.TouchPointList
 
 /** SDK linkage and firmware failures leave the standard Android input path available. */
 class BooxPenAdapter(private val view: RasterSurface, private val status: (String) -> Unit) {
+    /** Simple overlay rectangles in surface-local coordinates, captured only at session open. */
+    var inputExclusions: () -> List<Rect> = { emptyList() }
     private var helper: TouchHelper? = null
     @Volatile private var generation = 0
     private var liveWidth: LivePreviewWidth? = null
@@ -54,10 +56,12 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             // TouchHelper, and suppress live ink when sent to EpdController directly.
             // Use the known-working rectangular region for both paths. Bitmap clipping
             // remains exact; hardware ink can briefly cross an angled paper edge.
-            val noExclusions = listOf(Rect(-1, -1, 0, 0))
-            created.setLimitRect(limit, noExclusions)
+            val exclusions = inputExclusions().mapNotNull { rect ->
+                Rect(rect).takeIf { it.intersect(limit) }
+            }.ifEmpty { listOf(Rect(-1, -1, 0, 0)) }
+            created.setLimitRect(limit, exclusions)
                 .openRawDrawing()
-            Log.i("BooxProbe", "Preview rectangular clip angle=${transform.rotationDegrees} setupMs=${android.os.SystemClock.elapsedRealtime() - clipStarted}")
+            Log.i("BooxProbe", "Preview rectangular clip angle=${transform.rotationDegrees} exclusions=$exclusions setupMs=${android.os.SystemClock.elapsedRealtime() - clipStarted}")
             resumePreview(created)
             view.rawInput = created.isRawDrawingCreated && created.isRawDrawingInputEnabled
             val location = IntArray(2).also { view.getLocationOnScreen(it) }

@@ -1,11 +1,13 @@
 # BOOX pens alongside the editable engine
 
-Checkpoint before this work: `42747a3` (portable save/open included). Current
-header/log: `notes pens v2` / `notes-pens-v2`.
+Checkpoint before this work: `42747a3` (portable save/open included). Pen revision:
+`notes pens v2` / `notes-pens-v2`. The later UI marker is `floating-toolbar-v1`;
+see HANDOFF.md. BOOX pens now share the floating bottom toolbar with Eraser,
+Undo, Redo and Settings; Studio tools and the former top rows are hidden.
 
 The BOOX pens toolbar reuses Marker, Ink (regular pen), Fountain and Brush, and
-adds Calligraphy, Ballpoint, Pencil fine and Pencil coarse. Studio retains Tilt,
-the custom Pencil/Charcoal and Eraser. Existing IDs, settings, artwork and rendering
+adds Calligraphy, Ballpoint, Pencil fine and Pencil coarse. The hidden Studio
+tools retain their saved settings and engines. Existing IDs, artwork and rendering
 algorithms remain intact. The BOOX row scrolls horizontally on narrow screens.
 
 New pens always use original SDK bitmap renderers, including in recovered builds:

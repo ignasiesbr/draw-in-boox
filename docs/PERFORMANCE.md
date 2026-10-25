@@ -1,6 +1,14 @@
 # Stroke responsiveness investigation
 
-Current header/log: `notes pens v2` / `notes-pens-v2`. The separate BOOX pens row
+Current UI marker: `floating toolbar v1` in Settings / `floating-toolbar-v1` in
+launch logs. The canvas fills the former top-control area, with an opaque floating
+bottom toolbar. Native input excludes that one surface-local rectangle at session
+open; the paper's rectangular clip remains. No contact-time region setters are
+added. Brush geometry, native width/color policy, saved crash-guard preference,
+per-stroke commits, immutable worker snapshots and the 450ms quiet gap are unchanged.
+This UI update establishes no new physical responsiveness or pen-matching result.
+
+Previous header/log: `notes pens v2` / `notes-pens-v2`. The separate BOOX pens row
 adds original-SDK square nib, ballpoint and two textured pencils without changing
 existing brush algorithms, the 450ms quiet gap or surface worker. Vendor geometry
 is prepared once for bounds and rasterization, in 128-input batches with bounded

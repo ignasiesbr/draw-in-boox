@@ -1,5 +1,28 @@
 # Research and handoff
 
+Default document size (2026-10-25): the first BOOX preset is now landscape,
+2480 × 1860 pixels, for both first-launch creation and the New canvas dialog.
+Existing checkpoints/imported drawings retain their dimensions. The dialog's
+Swap portrait / landscape control still offers portrait. Pixel count and memory
+budgets are unchanged; the UI marker remains `floating-toolbar-v1`.
+
+Floating toolbar (2026-10-25): `floating-toolbar-v1` replaces the top control,
+status and brush rows with one outlined white toolbar floating above the bottom
+of the canvas. BOOX pens scroll when needed; Eraser, Undo, Redo and Settings stay
+visible. Studio tools are hidden; a previously selected hidden tool falls back to
+Ink at startup without deleting its saved settings. Settings contains Files,
+New canvas, Clear (with confirmation and layer/alpha-lock guards), Refresh,
+View controls (zoom/rotation) and input-mode switching. Canvas/build/tool status
+is now in Settings. Actions dismiss Settings without applying preference drafts.
+Native setup excludes the toolbar's surface-local rectangle, captured at open;
+the existing paper clip, guard setting, renderer geometry, 450ms quiet gap and
+background handoff remain. Physical writing around the toolbar still needs user
+confirmation; screenshots and SDK readiness do not establish input responsiveness.
+Both renderer builds/lint and the full recovered Go103 device suite pass. On-device
+screen review confirmed the toolbar, Settings and Clear confirmation/Cancel;
+SDK logs confirm enabled input/rendering with the toolbar exclusion across reopen
+and layer-panel changes. The existing saved crash-guard value was retained.
+
 BOOX pens expansion (2026-10-25): checkpoint `42747a3` preserves all prior work.
 Header/log now `notes pens v2` / `notes-pens-v2`. The BOOX pens row reuses existing
 working pens and adds original-SDK Calligraphy, Ballpoint and two Pencil textures;

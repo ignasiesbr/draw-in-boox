@@ -9,16 +9,41 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.CheckBox
+import android.widget.Button
+
+data class SettingsAction(val label: String, val enabled: Boolean = true, val run: () -> Unit)
 
 /** Settings editor is independent of activity/layout and commits only after Apply. */
 object SettingsDialog {
-    fun show(context: Context, settings: AppSettings, apply: (AppSettings) -> Boolean): AlertDialog {
+    fun show(context: Context, settings: AppSettings, actions: List<SettingsAction> = emptyList(),
+        info: String? = null, apply: (AppSettings) -> Boolean): AlertDialog {
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
+        lateinit var dialog: AlertDialog
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             tag = "Settings content"
             setPadding(dp(24), dp(12), dp(24), dp(12))
             setBackgroundColor(Color.WHITE)
+        }
+        if (info != null) content.addView(TextView(context).apply {
+            text = info; textSize = 14f; setTextColor(Color.DKGRAY)
+            setPadding(0, 0, 0, dp(12))
+        })
+        if (actions.isNotEmpty()) {
+            content.addView(TextView(context).apply {
+                text = "Canvas"; textSize = 18f; setTextColor(Color.BLACK)
+            })
+            actions.chunked(2).forEach { pair ->
+                val row = LinearLayout(context)
+                pair.forEach { action ->
+                    row.addView(Button(context).apply {
+                        text = action.label; tag = action.label; textSize = 16f
+                        isAllCaps = false; isEnabled = action.enabled
+                        setOnClickListener { dialog.dismiss(); action.run() }
+                    }, LinearLayout.LayoutParams(0, dp(56), 1f))
+                }
+                content.addView(row)
+            }
         }
         content.addView(TextView(context).apply {
             text = "Layers panel position"; textSize = 18f; setTextColor(Color.BLACK)
@@ -55,7 +80,7 @@ object SettingsDialog {
             text = "Limits BOOX preview for gray and wide strokes. Turn off to test unrestricted native preview; the display service may crash."
             textSize = 14f; setTextColor(Color.DKGRAY)
         })
-        val dialog = AlertDialog.Builder(context).setTitle("Settings")
+        dialog = AlertDialog.Builder(context).setTitle("Settings")
             .setView(ScrollView(context).apply { addView(content) })
             .setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
         dialog.show()

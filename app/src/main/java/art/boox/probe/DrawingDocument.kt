@@ -27,7 +27,7 @@ data class CanvasPreset(val name: String, val spec: CanvasSpec)
 
 object CanvasSizes {
     val presets = listOf(
-        CanvasPreset("BOOX screen", CanvasSpec(1860, 2480)),
+        CanvasPreset("BOOX screen · landscape", CanvasSpec(2480, 1860)),
         CanvasPreset("Square", CanvasSpec(2048, 2048)),
         CanvasPreset("A5 · 300 ppi", CanvasSpec(1748, 2480, 300)),
         CanvasPreset("A4 · 300 ppi", CanvasSpec(2480, 3508, 300)),

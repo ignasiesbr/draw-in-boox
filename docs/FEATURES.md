@@ -1,5 +1,16 @@
 # Feature maintenance guide
 
+Current UI (`floating-toolbar-v1`): Studio pens and the old top rows are hidden.
+BOOX pens, Eraser, Undo, Redo and Settings share an opaque outlined toolbar over
+the bottom of the canvas. Only the pens scroll on narrow canvases; actions stay
+visible. The toolbar does not reserve document/surface space. Its rectangle is
+excluded from native input at session open, using the SDK's surface-local region
+API. Capture exclusions after layout; preserve close/reopen on canvas/panel changes.
+Settings owns the former top commands, with zoom/rotation under View controls and
+Clear retaining confirmation and layer protection. Command clicks dismiss Settings
+without applying preference drafts. Status/build/tool details live in Settings.
+The older row descriptions below document previous layouts.
+
 Brush rows: BOOX pens reuses Marker/Ink/Fountain/Brush and adds Calligraphy,
 Ballpoint and two original-SDK Pencil textures. Studio keeps custom Pencil,
 Charcoal, Tilt and Eraser. Tap the selected icon for settings. Read

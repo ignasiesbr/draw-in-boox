@@ -22,8 +22,12 @@ Keep layer names at least 14sp. Long-pressing the name opens rename; retain a vi
 
 Settings should use a dedicated settings model and one settings dialog entry point, with labeled sections as options grow. Avoid placing application preferences in artwork checkpoints or adding a separate preference mechanism for every feature.
 
-Undo and Redo live on the right of the drawing toolbar as outline-arrow actions,
-with accessible names and disabled states when their history stack is empty.
+The drawing toolbar floats above the bottom of the canvas, with an opaque white
+background, a black outline and no shadow or animation. BOOX pens scroll on
+narrow canvases; Eraser, Undo, Redo and Settings stay visible. Studio tools and
+the old top control rows are hidden. Native ink excludes the toolbar rectangle.
+Undo and Redo use outline arrows, accessible names and disabled states when their
+history stack is empty. Clear is under Settings and retains its confirmation.
 Under Settings → History gestures, Undo (two-finger tap) and Redo (two-finger
 double tap) can each be disabled. Both start enabled. These choices affect
 shortcuts only: toolbar actions and pan/pinch/rotation remain available. A disabled

@@ -4,6 +4,9 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Rect
+import android.view.Gravity
+import android.view.View
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -19,13 +22,11 @@ import java.io.File
 class MainActivity : Activity() {
     private lateinit var surface: RasterSurface
     private lateinit var adapter: BooxPenAdapter
-    private lateinit var status: TextView
-    private lateinit var mode: Button
-    private lateinit var documentInfo: TextView
+    private var status = "Draw with the stylus. Fingers do not draw."
+    private var documentInfo = "BOOX Art"
     private lateinit var undoButton: EinkIconButton
     private lateinit var redoButton: EinkIconButton
     private lateinit var layerPanel: LayerPanel
-    private lateinit var clearButton: Button
     private lateinit var settingsStore: AppSettingsStore
     private var settings = AppSettings()
     private lateinit var drawingArea: LinearLayout
@@ -35,7 +36,6 @@ class MainActivity : Activity() {
     private var strokeCount = 0
     private var penConfigurationGeneration = 0
     private lateinit var brushStore: BrushSettingsStore
-    private lateinit var brushLabel: TextView
     private val brushButtons = mutableMapOf<BrushPreset, EinkIconButton>()
     private val strokeDiagnostics = StrokeDiagnostics()
     private lateinit var documentActions: DocumentActions
@@ -48,65 +48,17 @@ class MainActivity : Activity() {
         preferBoox = getPreferences(0).getBoolean("boox", true)
         File(filesDir, "strokes.jsonl").createNewFile()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE) }
-        documentInfo = TextView(this).apply {
-            text = "BOOX Art · Pen probe"
-            textSize = 22f; setTextColor(Color.BLACK); setPadding(20, 12, 20, 4)
-        }
-        root.addView(documentInfo)
-        val toolbar = LinearLayout(this)
-        fun button(row: LinearLayout, title: String, action: () -> Unit): Button = Button(this).apply {
-            text = title; textSize = 16f; isAllCaps = false; minimumHeight = dp(56)
-            tag = title
-            setOnClickListener { action() }
-            row.addView(this, LinearLayout.LayoutParams(0, dp(60), 1f))
-        }
-        mode = button(toolbar, "BOOX pen") {
-            preferBoox = !preferBoox
-            getPreferences(0).edit().putBoolean("boox", preferBoox).apply()
-            configurePen()
-        }
-        button(toolbar, "Refresh") { surface.render(); adapter.refresh() }
-        button(toolbar, "Files") { documentActions.menu { export() } }
-        clearButton = button(toolbar, "Clear") {
-            android.app.AlertDialog.Builder(this).setMessage("Clear the selected layer?")
-                .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
-                    adapter.close(); surface.clear(); strokeCount = 0; configurePen(); adapter.refresh()
-                }.show()
-        }
-        root.addView(toolbar)
-        val navigation = LinearLayout(this)
-        button(navigation, "New canvas") { newCanvas() }
-        button(navigation, "−") { zoom(ZoomAction.OUT) }
-        button(navigation, "+") { zoom(ZoomAction.IN) }
-        button(navigation, "Fit") { zoom(ZoomAction.FIT) }
-        button(navigation, "100%") { zoom(ZoomAction.ACTUAL) }
-        navigation.addView(EinkIconButton(this, UiIcon.SETTINGS, "Settings").apply {
-            tag = "Settings"
-            setOnClickListener { showSettings() }
-        }, LinearLayout.LayoutParams(dp(52), dp(60)))
-        root.addView(navigation)
-        val rotation = LinearLayout(this)
-        button(rotation, "Rotate −15°") { rotateView(surface.viewport.rotationDegrees - 15f) }
-        button(rotation, "Angle…") { chooseAngle() }
-        button(rotation, "Rotate +15°") { rotateView(surface.viewport.rotationDegrees + 15f) }
-        button(rotation, "Reset angle") { rotateView(0f) }
-        root.addView(rotation)
-        status = TextView(this).apply {
-            textSize = 16f; setTextColor(Color.BLACK); setPadding(20, 6, 20, 8)
-            text = "Draw with the stylus. Fingers do not draw."
-            height = dp(48)
-            maxLines = 2
-        }
-        root.addView(status)
         surface = RasterSurface(this, strokeFinished = ::recordStroke)
         surface.configureHistoryGestures(settings.undoGestureEnabled, settings.redoGestureEnabled)
         brushStore = BrushSettingsStore(this)
+        val savedPreset = brushStore.selected()
         val initialPreset = if (BuildConfig.BOOX_LAB && !getSharedPreferences("app_settings", 0).contains("brush_selected"))
-            BrushPreset.LAB_FOUNTAIN else brushStore.selected()
+            BrushPreset.LAB_FOUNTAIN else savedPreset.takeIf {
+                it in BrushPreset.notesToolbar || it == BrushPreset.ERASER
+            } ?: BrushPreset.INK
         surface.selectBrush(brushStore.load(initialPreset))
         adapter = BooxPenAdapter(surface) { message ->
-            status.text = message
-            mode.text = if (surface.rawInput) "BOOX pen" else "Android pen"
+            status = message
         }
         documentActions = DocumentActions(this, surface, { adapter.isBusy },
             { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() },
@@ -121,15 +73,14 @@ class MainActivity : Activity() {
             if (::layerPanel.isInitialized) layerPanel.invalidateThumbnails()
         }
         surface.layersChanged = {
-            clearButton.isEnabled = surface.canDraw && surface.document?.activeLayer?.alphaLocked != true
             if (::layerPanel.isInitialized) layerPanel.render(surface.document)
         }
-        surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
+        surface.historyFeedback = { status = it; Log.i("BooxProbe", it) }
         surface.error = { message ->
-            status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            status = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             documentActions.documentReady()
         }
-        val drawingTools = LinearLayout(this)
+        val drawingTools = FloatingToolbar(this, dp(12 + 52 * (BrushPreset.notesToolbar.size + 4) + 18))
         fun addBrush(row: LinearLayout, preset: BrushPreset) {
             val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
                 tag = "brush.${preset.id}"
@@ -141,22 +92,20 @@ class MainActivity : Activity() {
             brushButtons[preset] = control
             row.addView(control, LinearLayout.LayoutParams(dp(52), dp(52)))
         }
-        fun rowLabel(row: LinearLayout, text: String) {
-            row.addView(TextView(this).apply {
-                this.text = text; textSize = 14f; setTextColor(Color.BLACK)
-                gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0)
-            }, LinearLayout.LayoutParams(dp(80), dp(52)))
+        fun divider() {
+            drawingTools.addView(View(this).apply { setBackgroundColor(Color.BLACK) },
+                LinearLayout.LayoutParams(dp(1), dp(28)).apply {
+                    leftMargin = dp(4); rightMargin = dp(4)
+                })
         }
         val notesTools = LinearLayout(this).apply { tag = "brushes.notes" }
-        rowLabel(notesTools, "BOOX pens")
         BrushPreset.notesToolbar.forEach { addBrush(notesTools, it) }
-        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(notesTools) })
-        drawingTools.tag = "brushes.engine"
-        rowLabel(drawingTools, "Studio")
-        BrushPreset.available.filter { it !in BrushPreset.notesToolbar }.forEach { addBrush(drawingTools, it) }
-        brushLabel = TextView(this).apply { textSize = 16f; setTextColor(Color.BLACK)
-            gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, 0, 0) }
-        drawingTools.addView(brushLabel, LinearLayout.LayoutParams(0, dp(52), 1f))
+        drawingTools.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false; addView(notesTools)
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        divider()
+        addBrush(drawingTools, BrushPreset.ERASER)
+        divider()
         undoButton = EinkIconButton(this, UiIcon.UNDO, "Undo").apply {
             tag = "Undo"; isEnabled = false
             setOnClickListener { if (!surface.undo()) historyBusy() }
@@ -167,7 +116,9 @@ class MainActivity : Activity() {
         }
         drawingTools.addView(undoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
         drawingTools.addView(redoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
-        root.addView(drawingTools)
+        drawingTools.addView(EinkIconButton(this, UiIcon.SETTINGS, "Settings").apply {
+            tag = "Settings"; setOnClickListener { showSettings() }
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
         updateBrushControls()
         canvasArea = FrameLayout(this)
         canvasArea.addView(surface, FrameLayout.LayoutParams(-1, -1))
@@ -177,6 +128,14 @@ class MainActivity : Activity() {
             android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(12) })
         surface.rotationPreviewChanged = gestureIndicator::showAngle
         surface.zoomPreviewChanged = gestureIndicator::showZoom
+        canvasArea.addView(drawingTools, FrameLayout.LayoutParams(-2, -2,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(20)
+            })
+        adapter.inputExclusions = {
+            if (drawingTools.isShown && drawingTools.width > 0)
+                listOf(Rect().also { drawingTools.getHitRect(it) }) else emptyList()
+        }
         layerPanel = LayerPanel(this, getPreferences(0).getBoolean("layersExpanded", true),
             toggle = { expanded ->
                 val allowed = surface.preparePanelResize()
@@ -194,7 +153,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=notes-pens-v2 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=floating-toolbar-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -214,7 +173,22 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Finish drawing or navigation before opening settings.", Toast.LENGTH_SHORT).show()
             return
         }
-        SettingsDialog.show(this, settings) { updated ->
+        updateDocumentInfo()
+        val brush = checkNotNull(surface.brush.settings)
+        val actions = listOf(
+            SettingsAction("Files") { documentActions.menu { export() } },
+            SettingsAction("New canvas", run = ::newCanvas),
+            SettingsAction("Clear", surface.canDraw && surface.document?.activeLayer?.alphaLocked != true,
+                ::clearLayer),
+            SettingsAction("Refresh") { surface.render(); adapter.refresh() },
+            SettingsAction("View controls", run = ::showViewControls),
+            SettingsAction(if (preferBoox) "Use Android pen" else "Use BOOX pen") {
+                preferBoox = !preferBoox
+                getPreferences(0).edit().putBoolean("boox", preferBoox).apply()
+                schedulePenConfiguration()
+            })
+        SettingsDialog.show(this, settings, actions,
+            "$documentInfo\n${brush.preset.label} · ${brush.size} px · ${brush.shade.label}\n$status") { updated ->
             if (updated == settings) true
             else if (surface.isDrawing || surface.isNavigating || adapter.isBusy) {
                 Toast.makeText(this, "Finish drawing or navigation before changing settings.", Toast.LENGTH_SHORT).show()
@@ -245,6 +219,30 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun clearLayer() {
+        android.app.AlertDialog.Builder(this).setMessage("Clear the selected layer?")
+            .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
+                if (surface.isDrawing || surface.isNavigating || adapter.isBusy) historyBusy()
+                else {
+                    adapter.close(); surface.clear(); strokeCount = 0
+                    schedulePenConfiguration(); adapter.refresh()
+                }
+            }.show()
+    }
+
+    private fun showViewControls() {
+        val actions = listOf(
+            "Zoom out" to { zoom(ZoomAction.OUT) }, "Zoom in" to { zoom(ZoomAction.IN) },
+            "Fit" to { zoom(ZoomAction.FIT) }, "100%" to { zoom(ZoomAction.ACTUAL) },
+            "Rotate −15°" to { rotateView(surface.viewport.rotationDegrees - 15f) },
+            "Angle…" to { chooseAngle() },
+            "Rotate +15°" to { rotateView(surface.viewport.rotationDegrees + 15f) },
+            "Reset angle" to { rotateView(0f) })
+        android.app.AlertDialog.Builder(this).setTitle("View controls")
+            .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
+            .setNegativeButton("Cancel", null).show()
+    }
+
     private fun historyBusy() {
         Toast.makeText(this, "Finish drawing or navigation before changing history.", Toast.LENGTH_SHORT).show()
     }
@@ -267,11 +265,10 @@ class MainActivity : Activity() {
         val settings = checkNotNull(surface.brush.settings)
         brushButtons.forEach { (preset, button) ->
             button.isChecked = preset.id == settings.presetId
-            button.tooltipText = if (button.isChecked) "${preset.label} · tap again for settings" else preset.label
+            button.tooltipText = if (button.isChecked)
+                "${preset.label} · ${settings.size} px · ${settings.shade.label} · tap again for settings"
+                else preset.label
         }
-        brushLabel.text = "${settings.preset.label} · ${settings.size} px${if (settings.pressure) " max" else ""}"
-        brushLabel.contentDescription = "${brushLabel.text}. Tap the selected tool for settings."
-        if (!surface.brush.isEraser) brushLabel.text = "${brushLabel.text} · ${settings.shade.label}"
     }
 
     private fun editBrush() {
@@ -300,14 +297,13 @@ class MainActivity : Activity() {
         surface.inputEnabled = resumed && hasWindowFocus()
         if (!surface.inputEnabled || surface.document == null || surface.width == 0 || !surface.holder.surface.isValid) return
         if (!surface.canDraw) {
-            mode.text = if (preferBoox) "BOOX pen" else "Android pen"
-            status.text = if (surface.document!!.activeLayer.locked) "Layer locked · select another layer or unlock it"
+            status = if (surface.document!!.activeLayer.locked) "Layer locked · select another layer or unlock it"
                 else "Layer hidden · show it or select another layer"
             writeDocumentState()
             return
         }
         if (preferBoox) adapter.open()
-        else { status.text = "Android pen ready · pressure controls width"; mode.text = "Android pen" }
+        else { status = "Android pen ready · pressure controls width" }
         writeDocumentState()
     }
 
@@ -371,9 +367,9 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · notes pens v2" else "BOOX Art · notes pens v2"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · floating toolbar v1" else "BOOX Art · floating toolbar v1"
         val guardLabel = if (NativePreviewPolicy.firmwareCrashGuardEnabled) "" else " [guard off]"
-        documentInfo.text = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
+        documentInfo = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
     private fun zoom(action: ZoomAction) {
@@ -483,7 +479,7 @@ class MainActivity : Activity() {
         val tilts = samples.mapNotNull { it.tiltRadians }
         val tiltInfo = if (tilts.isEmpty()) "tilt unavailable" else
             "tilt ${Math.toDegrees(tilts.min().toDouble()).toInt()}-${Math.toDegrees(tilts.max().toDouble()).toInt()} deg"
-        status.post { if (!isDestroyed && resumed && number == strokeCount) status.text = "$message | $tiltInfo" }
+        surface.post { if (!isDestroyed && resumed && number == strokeCount) status = "$message | $tiltInfo" }
         Log.i("BooxProbe", "$tiltInfo rawTiltX=${samples.mapNotNull { it.rawTiltX }.let { it.minOrNull() to it.maxOrNull() }} rawTiltY=${samples.mapNotNull { it.rawTiltY }.let { it.minOrNull() to it.maxOrNull() }}")
         val outside = samples.count { it.x < 0 || it.y < 0 || it.x >= spec.width || it.y >= spec.height }
         Log.i("BooxProbe", "$message raw=${samples.minOf { it.rawPressure }}–${samples.maxOf { it.rawPressure }} max=${stroke.pressureRange.max} outside=$outside")

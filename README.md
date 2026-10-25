@@ -1,10 +1,19 @@
 # BOOX Art
 
-The **BOOX pens** row groups Marker, Calligraphy, Fountain, Ink, Brush, Ballpoint,
-and Pencil in fine/coarse textures (Fountain/Brush require the Lab build). Studio
-keeps the editable Pencil/Charcoal engine and Tilt. The new pens use original SDK
+The **floating toolbar** groups Marker, Calligraphy, Fountain, Ink, Brush, Ballpoint,
+and Pencil in fine/coarse textures (Fountain/Brush require the Lab build), followed
+by Eraser, Undo, Redo and Settings. Studio pens and the old top rows are hidden.
+Tap the selected pen again to edit it. The new pens use original SDK
 geometry with firmware-matched settings; physical matching is still under test.
 See [BOOX pens implementation and validation](docs/BOOX_NOTES_PENS.md).
+
+Open **Settings** for Files, New canvas, Clear, Refresh, View controls and input
+mode. Clear still asks before clearing the selected layer. View controls contains
+button zoom and rotation; finger navigation remains available on the canvas.
+
+New documents default to **BOOX screen · landscape**, 2480 × 1860 pixels.
+Use **Swap portrait / landscape** in New canvas for portrait. Existing drawings
+keep their saved dimensions.
 
 Use **Files → Save a copy…** to store an editable `.boox` drawing, and **Files →
 Open drawing…** to resume it on this device or another device running the app.
@@ -26,7 +35,7 @@ Current native compatibility policy: gray and wide brushes use app-rendered live
 ink after a BOOX system pen-renderer crash. The fast native path remains for black
 brushes up to the accepted 30px footprint. See [the crash workaround](docs/NATIVE_PREVIEW_SAFETY.md).
 
-The drawing toolbar offers Ink, Tilt (default), Marker and Eraser. Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink/Tilt retain their 1–12px base range. Drawing-tool settings include eight opaque gray shades, shared across pens. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker uses app preview, which can feel slower than native black/narrow ink; the native crash guard remains. Eraser currently trials native white feedback at <=30px on a single full-opacity layer with alpha lock off; other eraser cases use app preview. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
+Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink retains its 1–12px base range. Drawing-tool settings include eight opaque gray shades, shared across pens. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker uses app preview, which can feel slower than native black/narrow ink; the native crash guard remains. Eraser currently trials native white feedback at <=30px on a single full-opacity layer with alpha lock off; other eraser cases use app preview. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
 
 Native Kotlin raster drawing prototype targeting the original BOOX Go 10.3, Android 12 (API 32).
 
