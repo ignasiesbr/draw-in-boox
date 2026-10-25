@@ -5,11 +5,13 @@ import android.graphics.Color
 /** Keep the accepted black/narrow path. User-authorized white eraser experiment
  * is restricted to cases where transparency reveals only white paper. */
 object NativePreviewPolicy {
-    /** Set false and rebuild for explicit native gray/wide firmware experiments. */
-    const val ENFORCE_FIRMWARE_CRASH_GUARD = true
+    /** Cached process-wide preference; never read preferences in the input path. */
+    @Volatile var firmwareCrashGuardEnabled = true
+        private set
+    fun configure(settings: AppSettings) { firmwareCrashGuardEnabled = settings.firmwareCrashGuardEnabled }
     const val MAX_DOCUMENT_WIDTH = 30f
     fun color(brush: PressureBrush, document: DrawingDocument? = null, scale: Float = 1f): Int? =
-        colorWithGuard(ENFORCE_FIRMWARE_CRASH_GUARD, brush, document, scale)
+        colorWithGuard(firmwareCrashGuardEnabled, brush, document, scale)
 
     /** Explicit policy modes let tests cover guard-off without opening unsafe SDK sessions. */
     internal fun colorWithGuard(enforceCrashGuard: Boolean, brush: PressureBrush,

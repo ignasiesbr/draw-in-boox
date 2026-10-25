@@ -10,6 +10,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 class ProbeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        NativePreviewPolicy.configure(AppSettingsStore(this).load())
         // Match OnyxPenDemo/DemoApplication before any EpdController or TouchHelper use.
         // This exemption applies only to this process; no global Android setting is changed.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

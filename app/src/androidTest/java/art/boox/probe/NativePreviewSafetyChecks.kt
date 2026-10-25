@@ -53,7 +53,7 @@ object NativePreviewSafetyChecks {
         check(sent == dynamic.width(sample) * 2f) { "Accepted dynamic width response changed" }
 
         // This attached-view test specifically requires guarded Android fallback.
-        if (!NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) return
+        if (!NativePreviewPolicy.firmwareCrashGuardEnabled) return
         val directory = File(context.cacheDir, "native-safety-${System.nanoTime()}")
         val isolated = object : ContextWrapper(context) { override fun getFilesDir() = directory.apply { mkdirs() } }
         val completed = mutableListOf<PenStroke>()

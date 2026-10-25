@@ -9,7 +9,8 @@ enum class LayerPanelSide(val label: String, val storedValue: String) {
 
 /** Application preferences live outside document archives and can grow independently. */
 data class AppSettings(val layerPanelSide: LayerPanelSide = LayerPanelSide.RIGHT,
-    val undoGestureEnabled: Boolean = true, val redoGestureEnabled: Boolean = true)
+    val undoGestureEnabled: Boolean = true, val redoGestureEnabled: Boolean = true,
+    val firmwareCrashGuardEnabled: Boolean = true)
 
 class AppSettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -19,12 +20,14 @@ class AppSettingsStore(context: Context) {
             it.storedValue == preferences.getString("layer_panel_side", null)
         } ?: LayerPanelSide.RIGHT,
         undoGestureEnabled = preferences.getBoolean("undo_gesture_enabled", true),
-        redoGestureEnabled = preferences.getBoolean("redo_gesture_enabled", true)
+        redoGestureEnabled = preferences.getBoolean("redo_gesture_enabled", true),
+        firmwareCrashGuardEnabled = preferences.getBoolean("firmware_crash_guard_enabled", true)
     )
 
     fun save(settings: AppSettings) {
         preferences.edit().putString("layer_panel_side", settings.layerPanelSide.storedValue)
             .putBoolean("undo_gesture_enabled", settings.undoGestureEnabled)
-            .putBoolean("redo_gesture_enabled", settings.redoGestureEnabled).apply()
+            .putBoolean("redo_gesture_enabled", settings.redoGestureEnabled)
+            .putBoolean("firmware_crash_guard_enabled", settings.firmwareCrashGuardEnabled).apply()
     }
 }

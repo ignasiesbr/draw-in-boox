@@ -42,6 +42,7 @@ class MainActivity : Activity() {
         super.onCreate(state)
         settingsStore = AppSettingsStore(this)
         settings = settingsStore.load()
+        NativePreviewPolicy.configure(settings)
         preferBoox = getPreferences(0).getBoolean("boox", true)
         File(filesDir, "strokes.jsonl").createNewFile()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE) }
@@ -172,7 +173,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=preview-fit-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=guard-settings-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -199,16 +200,25 @@ class MainActivity : Activity() {
                 false
             } else {
                 val sideChanged = updated.layerPanelSide != settings.layerPanelSide
+                val guardChanged = updated.firmwareCrashGuardEnabled != settings.firmwareCrashGuardEnabled
                 if (sideChanged && !surface.preparePanelResize()) return@show false
+                if (guardChanged) {
+                    penConfigurationGeneration++
+                    surface.inputEnabled = false
+                    adapter.close()
+                }
                 settings = updated
                 settingsStore.save(updated)
+                NativePreviewPolicy.configure(updated)
+                updateDocumentInfo()
+                if (guardChanged) Log.i("BooxProbe", "Settings firmwareCrashGuard=${updated.firmwareCrashGuardEnabled}")
                 surface.configureHistoryGestures(updated.undoGestureEnabled, updated.redoGestureEnabled)
                 // Position, rather than size, can change. Explicitly reopen raw input
                 // after layout so the BOOX screen-space input region follows the canvas.
                 if (sideChanged) {
                     arrangeDrawingArea()
                     drawingArea.post { schedulePenConfiguration() }
-                }
+                } else if (guardChanged) schedulePenConfiguration()
                 true
             }
         }
@@ -293,7 +303,7 @@ class MainActivity : Activity() {
             .put("nativePreviewBaseWidthPx", surface.brush.nativePreviewBaseWidth)
             .put("nativePreviewMaxWidthPx", surface.brush.nativePreviewMaxWidth)
             .put("nativePreviewStyle", surface.brush.nativePreviewStyle)
-            .put("firmwareCrashGuardEnabled", NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD)
+            .put("firmwareCrashGuardEnabled", NativePreviewPolicy.firmwareCrashGuardEnabled)
             .put("undoCount", surface.history.undoCount).put("redoCount", surface.history.redoCount)
             .put("historyBytes", surface.history.bytesUsed)
             .put("layerCount", document.layers.size).put("maxLayers", document.maxLayers)
@@ -332,8 +342,8 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · preview fit v1" else "BOOX Art"
-        val guardLabel = if (NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) "" else " [guard off]"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · guard settings v1" else "BOOX Art"
+        val guardLabel = if (NativePreviewPolicy.firmwareCrashGuardEnabled) "" else " [guard off]"
         documentInfo.text = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
@@ -398,6 +408,7 @@ class MainActivity : Activity() {
         val viewWidth = surface.width
         val viewHeight = surface.height
         val wallTime = System.currentTimeMillis()
+        val firmwareCrashGuardEnabled = NativePreviewPolicy.firmwareCrashGuardEnabled
         val logFile = File(filesDir, "strokes.jsonl")
         strokeDiagnostics.submit {
         val points = JSONArray()
@@ -417,7 +428,7 @@ class MainActivity : Activity() {
             .put("engine", captured.engineId).put("engineVersion", captured.engineVersion)
             .put("presetId", captured.settings?.presetId ?: JSONObject.NULL)
             .put("settingsVersion", 3).put("nativePreviewScale", captured.settings?.nativePreviewScale ?: 1f)
-            .put("firmwareCrashGuardEnabled", NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD)
+            .put("firmwareCrashGuardEnabled", firmwareCrashGuardEnabled)
             .put("nativePreviewTexture", captured.settings?.nativePreviewTexture?.id ?: JSONObject.NULL)
             .put("nativePreviewBaseWidthPx", captured.nativePreviewBaseWidth)
             .put("nativePreviewMaxWidthPx", captured.nativePreviewMaxWidth)

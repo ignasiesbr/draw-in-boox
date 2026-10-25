@@ -1,5 +1,11 @@
 # Native pen renderer crash workaround
 
+Current control (2026-10-25): Settings > Advanced > Firmware crash guard, default
+on. It persists and takes effect on Apply without a rebuild. The cached policy is
+initialized before input opens; mode changes close the old session before updating
+the policy and reopening. Cancel leaves the active mode intact. The code-wide
+constant described below was replaced by this preference at the user's request.
+
 2026-10-24 update: the user explicitly requested a code-wide crash-guard switch
 for future reproduction work. `NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD`
 defaults to true. False plus rebuild bypasses native gray/width caps; this is not

@@ -1,5 +1,12 @@
 # Stroke responsiveness investigation
 
+Current header/log is guard settings v1 / guard-settings-v1. The crash guard is now
+a saved Settings > Advanced preference, default on. Applying it while idle closes
+the old native session and reconfigures after layout; pen callbacks use a cached
+boolean. Native feedback, dry raster v2, immutable worker snapshots and the 450ms
+quiet gap retain their accepted behavior. No guard-off physical reliability or
+latency result is claimed.
+
 Current header/log: `preview fit v1` / `preview-fit-v1`. Native preview-only
 fitting and the explicit firmware crash-guard code switch retain the accepted
 input/presentation and dry raster v2 performance path. See

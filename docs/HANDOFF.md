@@ -1,5 +1,13 @@
 # Research and handoff
 
+Advanced guard setting (2026-10-25): Settings > Advanced > Firmware crash guard
+now replaces the compile-time constant. Default on; Apply persists the value and
+reconfigures pen input while idle, Cancel discards the draft. Startup initializes
+NativePreviewPolicy.firmwareCrashGuardEnabled before input; callbacks never read
+preferences. Diagnostic strokes capture their mode before worker serialization.
+Header/log is guard settings v1 / guard-settings-v1. Existing brush fitting and
+performance remain in place; native gray/wide physical reliability is unmeasured.
+
 Preview fitting (2026-10-24): user reports dry previews too thick, Charcoal too
 light; Fountain and Brush work well. Preserve final artwork and prefer BOOX input.
 Header/log is preview fit v1 / preview-fit-v1. Pencil/Charcoal add preview-only

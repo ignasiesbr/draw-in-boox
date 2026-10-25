@@ -16,17 +16,25 @@ class RasterInstrumentation : Instrumentation() {
     private var fountainOnly = false
     private var brushesOnly = false
     private var dryBatchOnly = false
+    private var settingsOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
         fountainOnly = arguments?.getString("fountainOnly") == "true"
         brushesOnly = arguments?.getString("brushesOnly") == "true"
         dryBatchOnly = arguments?.getString("dryBatchOnly") == "true"
+        settingsOnly = arguments?.getString("settingsOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (settingsOnly) {
+                SettingsChecks.run(this)
+                result.putString("stream", "PASS: settings checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (dryBatchOnly) {
                 var failure: Throwable? = null
                 runOnMainSync { try { DryBrushBatchChecks.run() } catch (error: Throwable) { failure = error } }

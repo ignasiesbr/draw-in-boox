@@ -16,7 +16,7 @@ object NativePreviewGuardChecks {
             val unguarded = NativePreviewPolicy.colorWithGuard(false, brush)
             check(guarded == if (shade == InkShade.BLACK && size <= 30f) Color.BLACK else null)
             check(unguarded == shade.argb) { "Guard off did not request the selected native shade/width" }
-            check(NativePreviewPolicy.color(brush) == if (NativePreviewPolicy.ENFORCE_FIRMWARE_CRASH_GUARD) guarded else unguarded)
+            check(NativePreviewPolicy.color(brush) == if (NativePreviewPolicy.firmwareCrashGuardEnabled) guarded else unguarded)
         }
         val broadPencil = BrushPreset.LAB_PENCIL.defaults().copy(size = 64f).compile()
         check(guardedColor(broadPencil) == null)

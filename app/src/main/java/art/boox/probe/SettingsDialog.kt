@@ -16,6 +16,7 @@ object SettingsDialog {
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            tag = "Settings content"
             setPadding(dp(24), dp(12), dp(24), dp(12))
             setBackgroundColor(Color.WHITE)
         }
@@ -45,6 +46,15 @@ object SettingsDialog {
         }
         val undoGesture = gestureChoice("Undo: two-finger tap", "Undo gesture", settings.undoGestureEnabled)
         val redoGesture = gestureChoice("Redo: two-finger double tap", "Redo gesture", settings.redoGestureEnabled)
+        content.addView(TextView(context).apply {
+            text = "Advanced"; tag = "Advanced settings"; textSize = 18f; setTextColor(Color.BLACK)
+            setPadding(0, dp(24), 0, 0)
+        })
+        val crashGuard = gestureChoice("Firmware crash guard", "Firmware crash guard", settings.firmwareCrashGuardEnabled)
+        content.addView(TextView(context).apply {
+            text = "Limits BOOX preview for gray and wide strokes. Turn off to test unrestricted native preview; the display service may crash."
+            textSize = 14f; setTextColor(Color.DKGRAY)
+        })
         val dialog = AlertDialog.Builder(context).setTitle("Settings")
             .setView(ScrollView(context).apply { addView(content) })
             .setNegativeButton("Cancel", null).setPositiveButton("Apply", null).create()
@@ -52,7 +62,8 @@ object SettingsDialog {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val side = choices.entries.first { it.value.id == sides.checkedRadioButtonId }.key
             if (apply(settings.copy(layerPanelSide = side, undoGestureEnabled = undoGesture.isChecked,
-                    redoGestureEnabled = redoGesture.isChecked))) dialog.dismiss()
+                    redoGestureEnabled = redoGesture.isChecked,
+                    firmwareCrashGuardEnabled = crashGuard.isChecked))) dialog.dismiss()
         }
         return dialog
     }
