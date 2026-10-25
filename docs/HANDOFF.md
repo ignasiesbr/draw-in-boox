@@ -1,5 +1,19 @@
 # Research and handoff
 
+BOOX pens expansion (2026-10-25): checkpoint `42747a3` preserves all prior work.
+Header/log now `notes pens v2` / `notes-pens-v2`. The BOOX pens row reuses existing
+working pens and adds original-SDK Calligraphy, Ballpoint and two Pencil textures;
+Studio keeps the custom engine tools. Original and Rust libraries coexist through
+isolated JNI names. User rejected v1 native/final widths for Calligraphy and both
+Pencils. Inspection of installed Notes found missing 2x square render width and
+disabled pencil tilt; v2 carries the device parameters into final geometry.
+Physical v2 confirmation is pending. Read [BOOX_NOTES_PENS.md](BOOX_NOTES_PENS.md)
+for evidence, limitations, renderer mapping, budgets and validation commands.
+The accepted input/450ms/immutable worker policy and saved crash guard are retained.
+Recovered full device suite, both builds/lint, official focused pens and 29 Rust
+tests pass. V2 also removes redundant unchanged endpoints before SDK rendering,
+fixing a Calligraphy app-preview jump on lift. Existing recorded samples survive.
+
 Advanced guard setting (2026-10-25): Settings > Advanced > Firmware crash guard
 now replaces the compile-time constant. Default on; Apply persists the value and
 reconfigures pen input while idle, Cancel discards the draft. Startup initializes

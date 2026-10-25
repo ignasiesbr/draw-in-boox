@@ -16,7 +16,7 @@ import android.widget.ImageButton
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL }
+enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL, CALLIGRAPHY, BALLPOINT }
 
 /** Shared monochrome action/toggle. State is model-driven; clicking never silently toggles it.
  * No elevation, ripple or animated state; checked toggles have a 2dp black border. */
@@ -105,6 +105,14 @@ class UiIconDrawable(private val icon: UiIcon) : Drawable() {
             canvas.drawRect(left, top, right, bottom, paint)
         }
         when (icon) {
+            UiIcon.CALLIGRAPHY -> {
+                line(3f, 19f, 12f, 4f, 21f, 9f, 12f, 23f, 3f, 19f)
+                line(6f, 14f, 16f, 19f); line(3f, 19f, 12f, 23f)
+            }
+            UiIcon.BALLPOINT -> {
+                line(5f, 20f, 8f, 13f, 17f, 3f, 21f, 7f, 12f, 17f, 5f, 20f)
+                canvas.drawCircle(4f, 21f, 1f, paint); line(8f, 13f, 12f, 17f)
+            }
             UiIcon.CHARCOAL -> {
                 line(3f, 16f, 15f, 3f, 21f, 8f, 10f, 21f, 3f, 16f)
                 line(12f, 6f, 18f, 11f); line(4f, 20f, 5f, 21f); line(14f, 19f, 15f, 20f)

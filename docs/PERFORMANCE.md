@@ -1,5 +1,27 @@
 # Stroke responsiveness investigation
 
+Current header/log: `notes pens v2` / `notes-pens-v2`. The separate BOOX pens row
+adds original-SDK square nib, ballpoint and two textured pencils without changing
+existing brush algorithms, the 450ms quiet gap or surface worker. Vendor geometry
+is prepared once for bounds and rasterization, in 128-input batches with bounded
+retained results; native handles close per prepared stroke. Device parameters are
+captured at brush compilation, never per input sample. See BOOX_NOTES_PENS.md.
+First-pass physical widths did not match; v2 corrects Notes' square-width factor
+and pencil tilt configuration. Matching and ordinary-fast/burst responsiveness
+still require physical confirmation; no end-to-end latency result is claimed.
+
+Go103 v2 full-suite run: the 180-sample tilted fixture took warm geometry
+~17.5–18.2ms Calligraphy, ~1.6ms Ballpoint, ~16–20ms fine Pencil and ~18–20ms
+coarse Pencil. Initial Calligraphy/fine Pencil calls cost ~77ms/~59ms; their
+cached raster draws cost ~1ms/~3.8ms (coarse ~3.2ms). Original SDK generation
+therefore has a real pen-up CPU cost; retained native feedback does not erase
+that cost. Existing Rust algorithms remain unchanged. The surface crop check
+still copied 1,227,600 seed pixels/~6.3ms and a 2,000-pixel patch/~0.6ms.
+These are single-suite stage observations, not a controlled latency benchmark.
+Local evidence: `captures/notes-pens-v2/recovered-validation.log` (PID 13832).
+
+Earlier build-marker paragraphs below describe previous revisions.
+
 Current header/log is guard settings v1 / guard-settings-v1. The crash guard is now
 a saved Settings > Advanced preference, default on. Applying it while idle closes
 the old native session and reconfigures after layout; pen callbacks use a cached

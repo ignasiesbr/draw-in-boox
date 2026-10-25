@@ -3,7 +3,7 @@ package art.boox.probe
 import android.content.Context
 
 enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val maxSize: Float = 12f,
-    val booxFamily: BooxBrushFamily? = null) {
+    val booxFamily: BooxBrushFamily? = null, val notesPen: BooxNotesPen? = null) {
     INK("ink", "Ink", UiIcon.INK),
     TILT("tilt", "Tilt", UiIcon.TILT),
     // Keep the stored ID so existing Monoline size/dynamics preferences survive.
@@ -12,11 +12,17 @@ enum class BrushPreset(val id: String, val label: String, val icon: UiIcon, val 
     LAB_FOUNTAIN("lab_fountain", "Fountain Lab", UiIcon.MONOLINE, booxFamily = BooxBrushFamily.FOUNTAIN),
     LAB_BRUSH("lab_brush", "Brush", UiIcon.BRUSH, booxFamily = BooxBrushFamily.BRUSH),
     LAB_PENCIL("lab_pencil", "Pencil", UiIcon.PENCIL, 64f, BooxBrushFamily.PENCIL),
-    LAB_CHARCOAL("lab_charcoal", "Charcoal", UiIcon.CHARCOAL, 128f, BooxBrushFamily.CHARCOAL);
+    LAB_CHARCOAL("lab_charcoal", "Charcoal", UiIcon.CHARCOAL, 128f, BooxBrushFamily.CHARCOAL),
+    BOOX_CALLIGRAPHY("boox_calligraphy", "Calligraphy", UiIcon.CALLIGRAPHY, notesPen = BooxNotesPen.CALLIGRAPHY),
+    BOOX_BALLPOINT("boox_ballpoint", "Ballpoint", UiIcon.BALLPOINT, notesPen = BooxNotesPen.BALLPOINT),
+    BOOX_PENCIL_FINE("boox_pencil_fine", "Pencil · fine", UiIcon.PENCIL, 64f, notesPen = BooxNotesPen.PENCIL_FINE),
+    BOOX_PENCIL_COARSE("boox_pencil_coarse", "Pencil · coarse", UiIcon.CHARCOAL, 64f, notesPen = BooxNotesPen.PENCIL_COARSE);
 
-    fun defaults() = BrushSettings(id, size = when (this) { MONOLINE, ERASER -> 32f; LAB_PENCIL -> 8f; LAB_CHARCOAL -> 10f; else -> 12f },
+    fun defaults() = BrushSettings(id, size = when (this) { MONOLINE, ERASER -> 32f; LAB_PENCIL -> 8f; LAB_CHARCOAL -> 10f; BOOX_BALLPOINT -> 3f; BOOX_PENCIL_FINE, BOOX_PENCIL_COARSE -> 6f; BOOX_CALLIGRAPHY -> 8f; else -> 12f },
         pressure = this == INK || this == TILT || booxFamily != null, tilt = this == TILT || booxFamily?.dry == true)
     companion object {
+        val notesToolbar get() = listOf(MONOLINE, BOOX_CALLIGRAPHY, LAB_FOUNTAIN, INK, LAB_BRUSH,
+            BOOX_BALLPOINT, BOOX_PENCIL_FINE, BOOX_PENCIL_COARSE).filter { it in available }
         val available get() = entries.filter { it.booxFamily == null || (BuildConfig.BOOX_LAB &&
             (it.booxFamily.dry.not() || BuildConfig.RENDERER_BACKEND == "recovered")) }
         fun fromId(id: String?) = entries.firstOrNull { it.id == id } ?: TILT

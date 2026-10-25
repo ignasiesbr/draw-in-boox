@@ -1,5 +1,11 @@
 # Editable BOOX native renderer trial
 
+2026-10-25 update: [BOOX_NOTES_PENS.md](BOOX_NOTES_PENS.md) supersedes the library
+replacement packaging below. The source renderer now has isolated JNI names in
+`libboox_art_engine.so`, beside original `libneopen_jni.so`. Existing tools retain
+the selected backend; the new Notes-style pens always use original SDK geometry.
+Algorithms and accepted native/presentation behavior remain unchanged.
+
 User physical feedback after trying commit `f4bde6c`: "its good". This is positive
 validation of the Fountain trial's feel/result at the tested configuration. Exact
 native/raster pixel equivalence, other native types, and arbitrary custom live

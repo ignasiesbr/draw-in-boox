@@ -1,5 +1,11 @@
 # Feature maintenance guide
 
+Brush rows: BOOX pens reuses Marker/Ink/Fountain/Brush and adds Calligraphy,
+Ballpoint and two original-SDK Pencil textures. Studio keeps custom Pencil,
+Charcoal, Tilt and Eraser. Tap the selected icon for settings. Read
+[BOOX_NOTES_PENS.md](BOOX_NOTES_PENS.md) for JNI isolation, configuration matching,
+pixel/history ownership and physical validation limits.
+
 Alpha-lock native feedback: user explicitly accepts preview crossing the mask
 until reconciliation. Supported black paint remains native with alpha lock on;
 canonical SRC_ATOP pixels/history preserve all source alpha. Real SDK open is

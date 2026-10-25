@@ -36,11 +36,11 @@ $bindings = Join-Path $destination 'pennative-bindings.jar'
 try {
     [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('classes.jar'), $bindings, $true)
 } finally { $archive.Dispose() }
-$jniDirectory = Join-Path $destination 'jni\arm64-v8a'
+$jniDirectory = Join-Path $destination 'isolated-jni\arm64-v8a'
 $licenseDirectory = Join-Path $destination 'assets\licenses\recovered-renderer'
 New-Item -ItemType Directory -Path $jniDirectory, $licenseDirectory -Force | Out-Null
 $nativeLibrary = Join-Path $workspace 'experimental\boox-renderer\target\aarch64-linux-android\release\libneopen_jni.so'
-Copy-Item -LiteralPath $nativeLibrary -Destination (Join-Path $jniDirectory 'libneopen_jni.so') -Force
+Copy-Item -LiteralPath $nativeLibrary -Destination (Join-Path $jniDirectory 'libboox_art_engine.so') -Force
 foreach ($license in @('LICENSE.txt', 'GPL-3.0.txt')) {
     Copy-Item -LiteralPath (Join-Path $workspace "experimental\boox-renderer\$license") -Destination $licenseDirectory -Force
 }

@@ -130,7 +130,7 @@ class MainActivity : Activity() {
             documentActions.documentReady()
         }
         val drawingTools = LinearLayout(this)
-        BrushPreset.available.forEach { preset ->
+        fun addBrush(row: LinearLayout, preset: BrushPreset) {
             val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
                 tag = "brush.${preset.id}"
                 setOnClickListener {
@@ -139,8 +139,21 @@ class MainActivity : Activity() {
                 }
             }
             brushButtons[preset] = control
-            drawingTools.addView(control, LinearLayout.LayoutParams(dp(52), dp(52)))
+            row.addView(control, LinearLayout.LayoutParams(dp(52), dp(52)))
         }
+        fun rowLabel(row: LinearLayout, text: String) {
+            row.addView(TextView(this).apply {
+                this.text = text; textSize = 14f; setTextColor(Color.BLACK)
+                gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0)
+            }, LinearLayout.LayoutParams(dp(80), dp(52)))
+        }
+        val notesTools = LinearLayout(this).apply { tag = "brushes.notes" }
+        rowLabel(notesTools, "BOOX pens")
+        BrushPreset.notesToolbar.forEach { addBrush(notesTools, it) }
+        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(notesTools) })
+        drawingTools.tag = "brushes.engine"
+        rowLabel(drawingTools, "Studio")
+        BrushPreset.available.filter { it !in BrushPreset.notesToolbar }.forEach { addBrush(drawingTools, it) }
         brushLabel = TextView(this).apply { textSize = 16f; setTextColor(Color.BLACK)
             gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, 0, 0) }
         drawingTools.addView(brushLabel, LinearLayout.LayoutParams(0, dp(52), 1f))
@@ -181,7 +194,7 @@ class MainActivity : Activity() {
         arrangeDrawingArea()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=guard-settings-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=notes-pens-v2 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
@@ -358,7 +371,7 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · guard settings v1" else "BOOX Art"
+        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · notes pens v2" else "BOOX Art · notes pens v2"
         val guardLabel = if (NativePreviewPolicy.firmwareCrashGuardEnabled) "" else " [guard off]"
         documentInfo.text = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
@@ -432,7 +445,7 @@ class MainActivity : Activity() {
             .put("origin", stroke.pressureRange.origin)
         val captured = stroke.brush
         val brush = JSONObject().put("minWidthPx", captured.minWidth).put("maxWidthPx", captured.maxWidth)
-            .put("curve", captured.booxFamily?.label?.lowercase() ?: "linear").put("widthModifier", captured.widthModifier.id)
+            .put("curve", captured.notesPen?.name?.lowercase() ?: captured.booxFamily?.label?.lowercase() ?: "linear").put("widthModifier", captured.widthModifier.id)
             .put("pressureEnabled", captured.settings?.pressure ?: (captured.minWidth != captured.maxWidth))
             .put("tiltEnabled", captured.settings?.tilt ?: (captured.widthModifier !== NoWidthModifier))
             .put("maxWidthMultiplier", captured.widthModifier.maxMultiplier)
@@ -445,8 +458,13 @@ class MainActivity : Activity() {
             .put("nativePreviewBaseWidthPx", captured.nativePreviewBaseWidth)
             .put("nativePreviewMaxWidthPx", captured.nativePreviewMaxWidth)
             .put("nativePreviewStyle", captured.nativePreviewStyle).put("preview", if (source == "boox") {
-                if (captured.isEraser) "native-white-eraser" else if (captured.usesBooxEngine) "native-${captured.booxFamily!!.label.lowercase()}" else "native-round-width"
-            } else if (captured.usesBooxEngine) "app-${captured.booxFamily!!.label.lowercase()}" else "app-round-brush")
+                if (captured.isEraser) "native-white-eraser" else if (captured.notesPen != null) "native-notes-${captured.notesPen.name.lowercase()}" else if (captured.usesBooxEngine) "native-${captured.booxFamily!!.label.lowercase()}" else "native-round-width"
+            } else if (captured.notesPen != null) "app-notes-${captured.notesPen.name.lowercase()}" else if (captured.usesBooxEngine) "app-${captured.booxFamily!!.label.lowercase()}" else "app-round-brush")
+            .put("notesTiltEnabled", captured.notesConfig?.tiltEnabled ?: JSONObject.NULL)
+            .put("notesTiltScale", captured.notesConfig?.tiltScale ?: JSONObject.NULL)
+            .put("notesNibRatio", captured.notesConfig?.ratio ?: JSONObject.NULL)
+            .put("notesNibAngle", captured.notesConfig?.angle ?: JSONObject.NULL)
+            .put("notesSmoothing", captured.notesConfig?.smoothing ?: JSONObject.NULL)
             .put("operation", if (captured.isEraser) "erase" else "paint")
             .put("inkColorArgb", captured.inkColor).put("grayLevel", android.graphics.Color.red(captured.inkColor))
         val entry = JSONObject().put("schemaVersion", 9).put("source", source).put("stroke", number)

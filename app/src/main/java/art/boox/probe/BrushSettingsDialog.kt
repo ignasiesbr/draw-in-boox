@@ -26,6 +26,7 @@ object BrushSettingsDialog {
         val eraser = initial.preset == BrushPreset.ERASER
         val fountain = initial.preset.booxFamily != null
         val dry = initial.preset.booxFamily?.dry == true
+        val notes = initial.preset.notesPen != null
         val range = "1–${maximum.toInt()}"
         label("Size in document pixels ($range)")
         val size = EditText(context).apply {
@@ -44,12 +45,12 @@ object BrushSettingsDialog {
         val pressure = CheckBox(context).apply {
             text = if (dry) "Pressure changes width and darkness" else "Pressure changes width"; isChecked = initial.pressure; minHeight = dp(48)
             tag = "Brush pressure"; setTextColor(Color.BLACK)
-            if (!sizeOnly && !eraser && (!fountain || dry)) content.addView(this)
+            if (!sizeOnly && !eraser && !notes && (!fountain || dry)) content.addView(this)
         }
         val tilt = CheckBox(context).apply {
             text = "Tilt widens stroke (up to 2.5×)"; isChecked = initial.tilt; minHeight = dp(48)
             tag = "Brush tilt"; setTextColor(Color.BLACK)
-            if (!sizeOnly && !eraser && (!fountain || dry)) content.addView(this)
+            if (!sizeOnly && !eraser && !notes && (!fountain || dry)) content.addView(this)
         }
         val shade = if (sizeOnly || eraser) null else InkShadePicker(context, initial.shade).also { content.addView(it) }
         val nativeWidthLabel = if (dry && !sizeOnly) label("") else null
@@ -119,6 +120,7 @@ object BrushSettingsDialog {
             explanation.text = settings?.let {
                 val brush = it.compile()
                 if (eraser) "Erases the selected layer. Alpha lock must be off. Native preview: up to 30px at this zoom on one full-opacity layer."
+                else if (notes) "BOOX brush with its matching SDK renderer. Size and shade apply to both live feedback and final ink."
                 else if (dry) "Preview thickness and texture change only live feedback. " +
                     (if (NativePreviewPolicy.supports(brush)) "Fast BOOX preview is available at this size. "
                     else if (it.shade != InkShade.BLACK) "Gray uses app preview. "

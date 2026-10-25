@@ -26,7 +26,7 @@ android {
     }
     buildFeatures { buildConfig = true }
     if (rendererBackend == "recovered") {
-        sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/recovered-renderer/jni"))
+        sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/recovered-renderer/isolated-jni"))
         sourceSets.getByName("main").assets.srcDir(rootProject.file(".tools/recovered-renderer/assets"))
     }
     packaging { jniLibs.pickFirsts += "**/libc++_shared.so" }
@@ -37,13 +37,11 @@ android {
 }
 
 dependencies {
-    implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.4.4") {
-        if (rendererBackend == "recovered") exclude(group = "com.onyx.android.sdk", module = "onyxsdk-pennative")
-    }
+    implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.4.4")
     if (rendererBackend == "recovered") {
-        val originalBindings = rootProject.file(".tools/recovered-renderer/pennative-bindings.jar")
-        require(originalBindings.isFile) { "Run scripts/build-recovered-renderer.ps1 before building the recovered renderer." }
-        implementation(files(originalBindings))
+        require(rootProject.file(".tools/recovered-renderer/isolated-jni/arm64-v8a/libboox_art_engine.so").isFile) {
+            "Run scripts/build-recovered-renderer.ps1 before building the recovered renderer."
+        }
     }
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
     // BOOX brings early AndroidX releases whose manifests share a namespace.

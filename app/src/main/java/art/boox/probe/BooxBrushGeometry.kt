@@ -5,7 +5,6 @@ import android.graphics.Paint
 import android.graphics.RectF
 import com.onyx.android.sdk.data.note.TouchPoint
 import com.onyx.android.sdk.pen.PenUtils
-import com.onyx.android.sdk.pennative.NeoPenNative
 import com.onyx.android.sdk.pennative.PenConfig
 import com.onyx.android.sdk.pennative.PenInkResult
 
@@ -47,7 +46,7 @@ internal class BooxBrushGeometry(private val size: Float, private val color: Int
             tiltEnabled = false; directionEnabled = false
             displayScaleX = 1f; displayScaleY = 1f
         }
-        val native = NeoPenNative
+        val native = EditablePenNative
         val handle = native.createPen(config.type, config)
         check(handle != 0L) { "BOOX brush renderer could not create a pen" }
         val rendered = ArrayList<TouchPoint>()

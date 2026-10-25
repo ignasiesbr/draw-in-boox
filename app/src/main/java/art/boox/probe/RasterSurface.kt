@@ -234,9 +234,9 @@ class RasterSurface(
         historyTaps.cancel()
         try { history.execute(current, StrokeEdit(valid, capturedBrush)) }
         catch (failure: Throwable) {
-            if (!capturedBrush.usesBooxEngine || (failure !is Exception && failure !is LinkageError)) throw failure
-            Log.e("BooxProbe", "Experimental fountain stroke failed; artwork retained", failure)
-            error?.invoke("Fountain stroke failed: ${failure.message}. Existing artwork retained.")
+            if (!capturedBrush.requiresPreparedGeometry || (failure !is Exception && failure !is LinkageError)) throw failure
+            Log.e("BooxProbe", "Brush stroke failed; artwork retained", failure)
+            error?.invoke("Brush stroke failed: ${failure.message}. Existing artwork retained.")
             // History restores captured pixels on edit failure. Reconcile any
             // transient native ink through the caller's existing presentation path.
             return RectF(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat())
@@ -464,10 +464,10 @@ class RasterSurface(
         if (pending.isNotEmpty()) {
             val pendingBounds = try { strokeBrush.renderedBounds(pending) }
             catch (failure: Throwable) {
-                if (!strokeBrush.usesBooxEngine || (failure !is Exception && failure !is LinkageError)) throw failure
-                Log.e("BooxProbe", "Experimental fountain preview failed", failure)
+                if (!strokeBrush.requiresPreparedGeometry || (failure !is Exception && failure !is LinkageError)) throw failure
+                Log.e("BooxProbe", "Brush preview failed", failure)
                 cancelStroke()
-                error?.invoke("Fountain preview failed: ${failure.message}")
+                error?.invoke("Brush preview failed: ${failure.message}")
                 return
             }
             pendingBounds?.let { bounds ->

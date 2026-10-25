@@ -36,10 +36,13 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     val isEraser = settings?.preset == BrushPreset.ERASER
     val isBooxFountain = settings?.preset == BrushPreset.LAB_FOUNTAIN
     val booxFamily = settings?.preset?.booxFamily
+    val notesPen = settings?.preset?.notesPen
+    internal val notesConfig = notesPen?.let(BooxNotesConfig::read)
     val usesBooxEngine = booxFamily != null
+    val requiresPreparedGeometry = usesBooxEngine || notesPen != null
     private val roundMarker = isEraser || (settings?.preset == BrushPreset.MONOLINE &&
         !settings.pressure && !settings.tilt)
-    val engineId = if (usesBooxEngine) "boox-${booxFamily!!.label.lowercase()}-${BuildConfig.RENDERER_BACKEND}" else if (isEraser) "round-eraser" else if (roundMarker) "round-marker" else "continuous-round"
+    val engineId = if (notesPen != null) "boox-notes-${notesPen.name.lowercase()}-official" else if (usesBooxEngine) "boox-${booxFamily!!.label.lowercase()}-${BuildConfig.RENDERER_BACKEND}" else if (isEraser) "round-eraser" else if (roundMarker) "round-marker" else "continuous-round"
     val engineVersion = if (booxFamily?.dry == true) 2 else 1
     val inkColor: Int = settings?.shade?.argb ?: Color.BLACK
     init { require(minWidth.isFinite() && maxWidth.isFinite() && minWidth > 0 && maxWidth >= minWidth)
@@ -54,24 +57,28 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
     private val path = Path()
     private val booxGeometry by lazy { BooxBrushGeometry(maxWidth, inkColor, checkNotNull(booxFamily),
         settings?.pressure ?: true, settings?.tilt ?: false) }
+    private val notesGeometry by lazy { BooxNotesGeometry(maxWidth, inkColor, checkNotNull(notesPen), checkNotNull(notesConfig)) }
 
-    fun renderedBounds(samples: List<PenSample>) = if (usesBooxEngine) booxGeometry.bounds(samples)
+    fun renderedBounds(samples: List<PenSample>) = if (notesPen != null) notesGeometry.bounds(samples)
+        else if (usesBooxEngine) booxGeometry.bounds(samples)
         else StrokeDirtyBounds.document(samples, maxRenderedWidth)
 
     fun width(pressure: Float): Float = minWidth + (maxWidth - minWidth) *
         (if (pressure.isFinite()) pressure.coerceIn(0f, 1f) else 0f)
 
-    val maxRenderedWidth: Float get() = if (booxFamily?.dry == true) maxWidth * widthModifier.maxMultiplier
+    val maxRenderedWidth: Float get() = if (notesPen != null) maxOf(notesPen.maximumWidth(maxWidth),
+        if (notesPen.textured && notesConfig?.tiltEnabled == true) maxWidth * notesConfig.tiltScale else 0f)
+        else if (booxFamily?.dry == true) maxWidth * widthModifier.maxMultiplier
         else booxFamily?.maximumWidth(maxWidth) ?: (maxWidth * widthModifier.maxMultiplier)
     val nativePreviewBaseWidth: Float get() = if (booxFamily?.dry == true)
         maxWidth * (settings?.nativePreviewScale ?: 0.5f) else maxWidth
     // Firmware owns dry-brush dynamics even if app pressure/tilt controls are off.
     // Bound its configured footprint independently from the final app geometry.
     val nativePreviewMaxWidth: Float get() = if (booxFamily?.dry == true) nativePreviewBaseWidth * 2.5f else maxRenderedWidth
-    val nativePreviewStyle: Int get() = if (booxFamily?.dry == true)
+    val nativePreviewStyle: Int get() = if (notesPen != null) notesPen.style else if (booxFamily?.dry == true)
         (settings?.nativePreviewTexture ?: NativePreviewTexture.FINE).style
         else booxFamily?.previewStyle ?: com.onyx.android.sdk.pen.TouchHelper.STROKE_STYLE_PENCIL
-    val hasDynamicWidth: Boolean get() = (!usesBooxEngine || booxFamily?.appPreviewWidth == true) &&
+    val hasDynamicWidth: Boolean get() = notesPen == null && (!usesBooxEngine || booxFamily?.appPreviewWidth == true) &&
         (minWidth != maxWidth || widthModifier.maxMultiplier != 1f)
     fun width(sample: PenSample): Float = (if (booxFamily?.dry == true)
         maxWidth * ((if (booxFamily == BooxBrushFamily.CHARCOAL) 0.35f else 0.22f) +
@@ -83,6 +90,7 @@ class PressureBrush(val minWidth: Float = 1f, val maxWidth: Float = 12f,
         if (samples.isEmpty() || (isEraser && alphaLocked)) return
         paint.xfermode = if (isEraser) eraseMode else if (alphaLocked) alphaLockMode else null
         try {
+            if (notesPen != null) { notesGeometry.draw(canvas, paint, samples); return }
             if (usesBooxEngine) { booxGeometry.draw(canvas, paint, samples); return }
             if (roundMarker) {
                 val first = samples.first()

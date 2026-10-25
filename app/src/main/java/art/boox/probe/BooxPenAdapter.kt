@@ -65,6 +65,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
             if (!view.rawInput) { close(); status("BOOX did not enable input. Android pen mode.") }
             else status(when {
                 view.brush.isEraser -> "BOOX eraser · experimental white preview"
+                view.brush.notesPen != null -> "BOOX ${view.brush.settings!!.preset.label} · original SDK ink"
                 view.brush.usesBooxEngine -> "BOOX ${view.brush.booxFamily!!.label} · compare live and final stroke"
                 view.document?.activeLayer?.alphaLocked == true -> "BOOX pen · alpha lock applied to committed ink"
                 else -> "BOOX pen ready · pressure controls width"

@@ -1,7 +1,6 @@
 package art.boox.probe
 
 import android.graphics.*
-import com.onyx.android.sdk.pennative.NeoPenNative
 import com.onyx.android.sdk.pennative.PenConfig
 import com.onyx.android.sdk.pennative.PenInkResult
 import kotlin.math.abs
@@ -67,7 +66,7 @@ internal class DryBrushGeometry(private val size: Float, private val family: Boo
             pressureSensitivity = if (pressure) 1f else 0f; tiltEnabled = tilt
             displayScaleX = 1f; displayScaleY = 1f
         }
-        val native = NeoPenNative
+        val native = EditablePenNative
         val handle = native.createPen(config.type, config)
         check(handle != 0L) { "Could not create ${family.label}" }
         var output = FloatArray(4096)

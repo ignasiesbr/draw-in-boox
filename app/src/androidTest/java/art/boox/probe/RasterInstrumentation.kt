@@ -18,6 +18,7 @@ class RasterInstrumentation : Instrumentation() {
     private var dryBatchOnly = false
     private var settingsOnly = false
     private var documentsOnly = false
+    private var notesOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
@@ -26,11 +27,20 @@ class RasterInstrumentation : Instrumentation() {
         dryBatchOnly = arguments?.getString("dryBatchOnly") == "true"
         settingsOnly = arguments?.getString("settingsOnly") == "true"
         documentsOnly = arguments?.getString("documentsOnly") == "true"
+        notesOnly = arguments?.getString("notesOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (notesOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { BooxNotesChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: BOOX notes pen checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (settingsOnly) {
                 SettingsChecks.run(this)
                 result.putString("stream", "PASS: settings checks\n")
@@ -142,6 +152,7 @@ class RasterInstrumentation : Instrumentation() {
                     NativeEraserChecks.run()
                     BooxFountainChecks.run(targetContext)
                     BooxBrushChecks.run(targetContext)
+                    BooxNotesChecks.run(targetContext)
                     DryBrushBatchChecks.run()
                     DirtyFrameChecks.run(targetContext)
                     StrokePresentationChecks.run(targetContext)

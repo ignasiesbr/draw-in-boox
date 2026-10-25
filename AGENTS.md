@@ -1,5 +1,12 @@
 # Drawing performance: preserve the accepted baseline
 
+BOOX pens now coexist with the editable engine; read
+[docs/BOOX_NOTES_PENS.md](docs/BOOX_NOTES_PENS.md). Original `libneopen_jni.so`
+serves new Notes-style pens; Rust uses isolated `libboox_art_engine.so`/JNI names.
+Do not reconnect vendor classes to the recovered implementation. User reported
+v1 Calligraphy and both Pencil previews too thick. V2 follows installed Notes'
+2x final square width and firmware tilt settings; physical acceptance is pending.
+
 The source-renderer trial is isolated in `art.boox.probe.lab`; see
 [docs/RECOVERED_RENDERER_EXPERIMENT.md](docs/RECOVERED_RENDERER_EXPERIMENT.md).
 Stable checkpoint is `29c7373`. Lab Fountain/Brush/Charcoal use firmware family

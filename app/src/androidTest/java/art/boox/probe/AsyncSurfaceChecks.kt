@@ -110,7 +110,7 @@ object AsyncSurfaceChecks {
                     check(native.open() && surface.rawInput) { "Native pen did not reopen after white eraser" }
                     native.close()
                     if (BuildConfig.BOOX_LAB) {
-                        for (preset in BrushPreset.available.filter { it.booxFamily != null }) {
+                        for (preset in BrushPreset.available.filter { it.booxFamily != null || it.notesPen != null }) {
                             surface.selectBrush(preset.defaults())
                             check(native.open() && surface.rawInput) { "Native ${preset.label} style did not open" }
                             native.close()
@@ -271,7 +271,8 @@ object AsyncSurfaceChecks {
                 check(surface.history.undoCount == 1 && surface.document!!.layer.getPixel(120, 90) == InkShade.LIGHT.argb)
             }
             if (BuildConfig.RENDERER_BACKEND == "recovered") {
-                for (preset in listOf(BrushPreset.LAB_PENCIL, BrushPreset.LAB_CHARCOAL)) {
+                for (preset in listOf(BrushPreset.LAB_PENCIL, BrushPreset.LAB_CHARCOAL) +
+                    BrushPreset.available.filter { it.notesPen != null }) {
                     onMain {
                         surface.createDocument(CanvasSpec(260, 260)); surface.rotateView(-22f)
                         surface.zoom(ZoomAction.ACTUAL)

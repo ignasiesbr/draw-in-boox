@@ -1,5 +1,11 @@
 # BOOX Art
 
+The **BOOX pens** row groups Marker, Calligraphy, Fountain, Ink, Brush, Ballpoint,
+and Pencil in fine/coarse textures (Fountain/Brush require the Lab build). Studio
+keeps the editable Pencil/Charcoal engine and Tilt. The new pens use original SDK
+geometry with firmware-matched settings; physical matching is still under test.
+See [BOOX pens implementation and validation](docs/BOOX_NOTES_PENS.md).
+
 Use **Files → Save a copy…** to store an editable `.boox` drawing, and **Files →
 Open drawing…** to resume it on this device or another device running the app.
 Files preserve all layer pixels, ordering, names and settings. PNG export is also

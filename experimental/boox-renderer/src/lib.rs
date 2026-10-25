@@ -1516,7 +1516,7 @@ fn modern_jni_boundary<'local, T: Default>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeSetLogLevel(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeSetLogLevel(
     mut env: EnvUnowned,
     _object: JObject,
     level: jint,
@@ -1527,7 +1527,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeSetLogLe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeCreatePen<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeCreatePen<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     pen_type: jint,
@@ -1555,7 +1555,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeCreatePe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeDestroyPen(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeDestroyPen(
     mut env: EnvUnowned,
     _object: JObject,
     handle: jlong,
@@ -1629,7 +1629,7 @@ fn render_call(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenDown<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeOnPenDown<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1653,7 +1653,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenDow
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenMove<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeOnPenMove<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1679,7 +1679,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenMov
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenUp<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeOnPenUp<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1703,7 +1703,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeOnPenUp<
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeSetBitmapColor<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenNative_nativeSetBitmapColor<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     bitmap: JObject<'local>,
@@ -1726,7 +1726,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenNative_nativeSetBitma
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCreateLogger(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeCreateLogger(
     mut env: EnvUnowned,
     _object: JObject,
 ) -> jlong {
@@ -1736,7 +1736,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCr
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeRegisterLogger(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeRegisterLogger(
     mut env: EnvUnowned,
     _object: JObject,
     logger: jlong,
@@ -1749,7 +1749,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeRe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeSetLogLevel(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeSetLogLevel(
     mut env: EnvUnowned,
     _object: JObject,
     level: jint,
@@ -1760,7 +1760,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCreatePen<'local>(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeCreatePen<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     pen_type: jint,
@@ -1792,7 +1792,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeCr
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeDestroyPen(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeDestroyPen(
     mut env: EnvUnowned,
     _object: JObject,
     handle: jlong,
@@ -1803,7 +1803,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeDe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeOnPenDown<'local>(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeOnPenDown<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1827,7 +1827,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeOn
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeOnPenMove<'local>(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeOnPenMove<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1853,7 +1853,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeOn
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeOnPenUp<'local>(
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeOnPenUp<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _object: JObject<'local>,
     handle: jlong,
@@ -1944,7 +1944,7 @@ fn modern_bitmap_pixel(pixel: i32) -> i32 {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pennative_NeoPenNative_nativeSetBitmapColor<
+pub extern "system" fn Java_art_boox_probe_RecoveredPenNative_nativeSetBitmapColor<
     'local,
 >(
     mut unowned_env: EnvUnowned<'local>,
@@ -1976,7 +1976,7 @@ fn legacy_handle() -> Option<i64> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeInitPen<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeInitPen<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _class: JObject<'local>,
     config: JObject<'local>,
@@ -2007,7 +2007,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeInitPen
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeDestroyPen(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeDestroyPen(
     mut env: EnvUnowned,
     _class: JObject,
 ) {
@@ -2186,7 +2186,7 @@ fn legacy_compute(env: &mut Env, points: JDoubleArray) -> jobjectArray {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenDown<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeOnPenDown<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _class: JObject<'local>,
     points: JDoubleArray<'local>,
@@ -2201,7 +2201,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenDo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenMove<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeOnPenMove<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _class: JObject<'local>,
     points: JDoubleArray<'local>,
@@ -2216,7 +2216,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenMo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenUp<'local>(
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeOnPenUp<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _class: JObject<'local>,
     points: JDoubleArray<'local>,
@@ -2231,7 +2231,7 @@ pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeOnPenUp
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeComputeRenderPoints<
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeComputeRenderPoints<
     'local,
 >(
     mut unowned_env: EnvUnowned<'local>,
@@ -2277,7 +2277,7 @@ fn rendered_bitmaps(env: &mut Env) -> jobjectArray {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_onyx_android_sdk_pen_NeoPenWrapper_nativeGetRenderedBitmaps<
+pub extern "system" fn Java_art_boox_probe_unused_pen_NeoPenWrapper_nativeGetRenderedBitmaps<
     'local,
 >(
     mut unowned_env: EnvUnowned<'local>,

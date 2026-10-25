@@ -1,5 +1,10 @@
 # E-ink brush engine
 
+Current extension: [BOOX_NOTES_PENS.md](BOOX_NOTES_PENS.md) adds original SDK pens
+alongside the editable engine. Recovered builds now isolate Rust JNI in
+`libboox_art_engine.so`; BOOX's original library remains available to new pens.
+Existing custom geometry and firmware preview fitting are unchanged.
+
 The editable engine is in BOOX Art Lab (`booxRenderer=recovered`). Firmware still
 owns native live ink. Rust supplies committed geometry; the same geometry supplies
 app preview for gray/wide brushes. The accepted native input, 450ms quiet gap,
