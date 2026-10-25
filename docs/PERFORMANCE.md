@@ -7,6 +7,13 @@ boolean. Native feedback, dry raster v2, immutable worker snapshots and the 450m
 quiet gap retain their accepted behavior. No guard-off physical reliability or
 latency result is claimed.
 
+Portable drawing files add explicit background Save/Open operations; see
+SAVE_FORMAT.md. The editor freezes and closes pen input only for those operations.
+Stroke commits still do no artwork serialization or save-file writes, and the
+native safety/450ms/immutable-snapshot presentation policy is unchanged. File
+round-trips and input regression checks do not establish a new physical latency
+measurement.
+
 Current header/log: `preview fit v1` / `preview-fit-v1`. Native preview-only
 fitting and the explicit firmware crash-guard code switch retain the accepted
 input/presentation and dry raster v2 performance path. See

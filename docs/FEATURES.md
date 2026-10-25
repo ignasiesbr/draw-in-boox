@@ -99,7 +99,7 @@ BOOX live ink is firmware-rendered foreground feedback: it can appear above high
 
 Layer limits are intentional: `LayerLimits.maxLayers(spec)` reserves history, two full-size buffers and app overhead, with at most half the heap for layer pixels and a hard count cap of 64. Verified Go103 limits are 7 at 1860x2480 and 3 at A4. Revisit the whole working-memory budget before adding per-layer caches, masks or previews; do not simply raise the cap.
 
-Internal `DocumentStore` v2 archives contain `document.json` and `layers/<id>.png`, preserving order/names/flags/selection and viewport metadata. Version 1 and legacy PNG migration remain supported. Validate dimensions, IDs, viewport values and memory before exposing loaded state; recycle partial allocations on failure. Public save/open/sharing is deferred by user choice. This internal checkpoint is not that public format.
+Internal `DocumentStore` v2 archives contain `document.json` and `layers/<id>.png`, preserving order/names/flags/selection and viewport metadata. Version 1 and legacy PNG migration remain supported. Validate dimensions, IDs, viewport values and memory before exposing loaded state; recycle partial allocations on failure. Public save/open now uses the separate portable v1 `.boox` contract in [SAVE_FORMAT.md](SAVE_FORMAT.md), through `DocumentFile` and `DocumentActions`. It omits viewport/tools/history and retains all layer pixels/settings. Keep these two independent version namespaces distinct.
 
 ### Layer opacity and layer settings
 

@@ -1,6 +1,6 @@
 # Layer system
 
-Implemented and physically accepted by the user on 2026-10-23, including opacity and alpha lock. See [FEATURES.md](FEATURES.md) for maintenance details and [EINK_UI.md](EINK_UI.md) for shared UI conventions. Public save/open/sharing remains deferred.
+Implemented and physically accepted by the user on 2026-10-23, including opacity and alpha lock. See [FEATURES.md](FEATURES.md) for maintenance details and [EINK_UI.md](EINK_UI.md) for shared UI conventions. Portable save/open is implemented; see [SAVE_FORMAT.md](SAVE_FORMAT.md).
 
 ## Controls and behavior
 

@@ -17,6 +17,7 @@ class RasterInstrumentation : Instrumentation() {
     private var brushesOnly = false
     private var dryBatchOnly = false
     private var settingsOnly = false
+    private var documentsOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
@@ -24,6 +25,7 @@ class RasterInstrumentation : Instrumentation() {
         brushesOnly = arguments?.getString("brushesOnly") == "true"
         dryBatchOnly = arguments?.getString("dryBatchOnly") == "true"
         settingsOnly = arguments?.getString("settingsOnly") == "true"
+        documentsOnly = arguments?.getString("documentsOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
@@ -32,6 +34,15 @@ class RasterInstrumentation : Instrumentation() {
             if (settingsOnly) {
                 SettingsChecks.run(this)
                 result.putString("stream", "PASS: settings checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
+            if (documentsOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { DocumentFileChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                DocumentFileChecks.actions(this)
+                result.putString("stream", "PASS: portable document checks\n")
                 finish(Activity.RESULT_OK, result)
                 return
             }
@@ -112,6 +123,7 @@ class RasterInstrumentation : Instrumentation() {
                     checkRotatedPointers(view, strokes)
                     checkCheckpoint(testContext, view, file)
                     DocumentChecks.run(targetContext)
+                    DocumentFileChecks.run(targetContext)
                     CanvasGestureChecks.run(targetContext)
                     GestureRotationChecks.run(targetContext)
                     GestureZoomChecks.run(targetContext)
@@ -138,6 +150,7 @@ class RasterInstrumentation : Instrumentation() {
             }
             failure?.let { throw it }
             CanvasDialogChecks.run(this)
+            DocumentFileChecks.actions(this)
             LayerPanelChecks.run(this)
             SettingsChecks.run(this)
             BrushChecks.dialogs(this)

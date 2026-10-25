@@ -54,6 +54,7 @@ class RasterSurface(
     internal var lastSnapshotMetrics: SnapshotMetrics? = null
         private set
     private var loadFailed = false
+    internal val initializationComplete: Boolean get() = document != null || loadFailed
     var inputEnabled = true
         set(value) { field = value; if (!value) { historyTaps.cancel(); gestures.cancel(); cancelStroke() } }
     var rawInput = false
@@ -168,6 +169,14 @@ class RasterSurface(
         document?.releaseComposite()
         val replacement = DrawingDocument.create(spec)
         try { store.save(replacement, null) } catch (failure: Throwable) { replacement.recycle(); throw failure }
+        installDocument(replacement)
+    }
+
+    internal fun checkpointReplacement(replacement: DrawingDocument) = store.save(replacement, null)
+
+    /** Takes ownership only after a complete import. Caller has frozen edits and saved a checkpoint. */
+    fun installDocument(replacement: DrawingDocument) {
+        check(!isDrawing && !isNavigating) { "Finish drawing or navigation before opening a drawing." }
         viewportWillChange?.invoke()
         historyTaps.cancel()
         cancelStroke()
@@ -176,6 +185,7 @@ class RasterSurface(
         document = replacement
         layersChanged?.invoke()
         loadFailed = false
+        val spec = replacement.spec
         viewport.resize(spec, viewport.viewWidth.coerceAtLeast(1), viewport.viewHeight.coerceAtLeast(1),
             ViewportState(1f, spec.width / 2f, spec.height / 2f, true))
         render()

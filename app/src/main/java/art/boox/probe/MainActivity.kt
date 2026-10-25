@@ -2,6 +2,7 @@ package art.boox.probe
 
 import android.app.Activity
 import android.content.ContentValues
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -37,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var brushLabel: TextView
     private val brushButtons = mutableMapOf<BrushPreset, EinkIconButton>()
     private val strokeDiagnostics = StrokeDiagnostics()
+    private lateinit var documentActions: DocumentActions
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -64,7 +66,7 @@ class MainActivity : Activity() {
             configurePen()
         }
         button(toolbar, "Refresh") { surface.render(); adapter.refresh() }
-        button(toolbar, "Export PNG") { export() }
+        button(toolbar, "Files") { documentActions.menu { export() } }
         clearButton = button(toolbar, "Clear") {
             android.app.AlertDialog.Builder(this).setMessage("Clear the selected layer?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ ->
@@ -106,7 +108,10 @@ class MainActivity : Activity() {
             status.text = message
             mode.text = if (surface.rawInput) "BOOX pen" else "Android pen"
         }
-        surface.ready = { updateDocumentInfo(); schedulePenConfiguration() }
+        documentActions = DocumentActions(this, surface, { adapter.isBusy },
+            { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() },
+            ::schedulePenConfiguration)
+        surface.ready = { updateDocumentInfo(); documentActions.documentReady(); schedulePenConfiguration() }
         surface.unavailable = { adapter.close() }
         surface.viewportWillChange = { surface.inputEnabled = false; adapter.close() }
         surface.navigationStarted = { penConfigurationGeneration++; adapter.close() }
@@ -120,7 +125,10 @@ class MainActivity : Activity() {
             if (::layerPanel.isInitialized) layerPanel.render(surface.document)
         }
         surface.historyFeedback = { status.text = it; Log.i("BooxProbe", it) }
-        surface.error = { message -> status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
+        surface.error = { message ->
+            status.text = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            documentActions.documentReady()
+        }
         val drawingTools = LinearLayout(this)
         BrushPreset.available.forEach { preset ->
             val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
@@ -272,6 +280,7 @@ class MainActivity : Activity() {
     }
 
     private fun configurePen() {
+        if (documentActions.busy) return
         if (surface.isNavigating) return
         adapter.close()
         surface.cancelStroke()
@@ -325,8 +334,9 @@ class MainActivity : Activity() {
     }
     override fun onPause() {
         penConfigurationGeneration++
-        resumed = false; surface.inputEnabled = false; adapter.close(); surface.checkpoint()
-        Log.i("BooxProbe", "Activity paused; input closed and bitmap checkpointed")
+        resumed = false; surface.inputEnabled = false; adapter.close()
+        if (!documentActions.busy) surface.checkpoint()
+        Log.i("BooxProbe", "Activity paused; input closed, checkpoint=${if (documentActions.busy) "file operation owns frozen document" else "requested"}")
         super.onPause()
     }
     override fun onWindowFocusChanged(focused: Boolean) {
@@ -337,7 +347,13 @@ class MainActivity : Activity() {
             else { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() }
         }
     }
-    override fun onDestroy() { adapter.close(); surface.dispose(); strokeDiagnostics.close(); super.onDestroy() }
+    override fun onDestroy() { adapter.close(); documentActions.destroy(); strokeDiagnostics.close(); super.onDestroy() }
+
+    @Deprecated("Framework file picker result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        documentActions.onResult(requestCode, resultCode, data)
+    }
 
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
@@ -380,11 +396,7 @@ class MainActivity : Activity() {
     private fun newCanvas() {
         if (surface.isDrawing) { Toast.makeText(this, "Lift the pen before creating a canvas.", Toast.LENGTH_SHORT).show(); return }
         CanvasSizeDialog.show(this) { spec ->
-            android.app.AlertDialog.Builder(this).setTitle("Replace current canvas?")
-                .setMessage("Create ${spec.width} × ${spec.height} pixels. Export the current drawing first to keep a PNG copy.")
-                .setNegativeButton("Cancel", null)
-                .setNeutralButton("Export & create") { _, _ -> if (export()) createCanvas(spec) }
-                .setPositiveButton("Discard & create") { _, _ -> createCanvas(spec) }.show()
+            documentActions.confirmReplace("Create ${spec.width} × ${spec.height} canvas?") { createCanvas(spec) }
         }
     }
 

@@ -21,6 +21,23 @@ and input/handoff lifecycle rules. Both policy modes are tested without enabling
 unsafe gray/wide SDK sessions. Full default-guard Go103 suite passes. See
 NATIVE_PREVIEW_CALIBRATION.md for migration, known tone limits and switch details.
 
+Portable save/open: **Files → Save a copy… / Open drawing…** uses Android document
+providers and `.boox` ZIP/JSON/PNG files. All raster layers/settings and selection
+round-trip; portable files omit tools, viewport and history. The separate internal
+checkpoint still handles restart. New/Open offer Save & continue or explicit discard.
+Read [SAVE_FORMAT.md](SAVE_FORMAT.md) for version/default/required-feature rules,
+validation limits, worker ownership, atomic-save boundaries and tests. The accepted
+native safety/450ms/background presentation policy is unchanged by file operations.
+Focused portable and full recovered Lab suites passed on Go103 on 2026-10-25;
+standard/recovered builds and lint passed. Actual Downloads picker save and ZIP
+inspection passed (captures 20261025-084345 and 20261025-084439). Actual Open from
+Downloads also passed: capture 20261025-090139 shows retained artwork/layer, upright
+Fit, empty history and real SDK input reopened. A copy of the pre-open drawing is
+kept as Download/drawing-1792915179878.boox. Updated focused device checks cover
+early picker results after Activity recreation and recovery from a corrupt private
+checkpoint. Cloud/second-device testing is not claimed. Run
+`dev.ps1 test -Renderer recovered -DocumentsOnly` for focused checks.
+
 Performance follow-up after checkpoint `663eb14`: header/log `brush perf v1` /
 `brush-perf-v1`. Upright full cache seeds copy visible document pixels only; idle
 native close preserves an acknowledged cache. Pending frames and actual view/
