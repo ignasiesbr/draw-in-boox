@@ -127,6 +127,48 @@ object AsyncSurfaceChecks {
                     }
                 } finally { native.close(); surface.inputEnabled = false }
             }
+            // A real attached surface must repaint the artwork and paper before lift,
+            // including rapid changes and shrinkage that exposes the old paper edges.
+            for (angle in listOf(0f, 37f)) {
+                val x = surface.width / 2f
+                val y = surface.height / 2f
+                onMain {
+                    surface.createDocument(CanvasSpec(512, 512))
+                    surface.zoom(ZoomAction.ACTUAL); surface.rotateView(angle)
+                    surface.commit(listOf(PenSample(50f, 80f, 1f, 0), PenSample(460f, 400f, 1f, 1)), "zoom-test")
+                    surface.inputEnabled = true
+                    GestureZoomChecks.send(surface, android.view.MotionEvent.ACTION_DOWN, x = x, y = y)
+                    GestureZoomChecks.send(surface, android.view.MotionEvent.ACTION_POINTER_DOWN or
+                        (1 shl android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT), x = x, y = y)
+                }
+                for (ratios in listOf(listOf(1.5f), listOf(2f, 3f, 0.75f))) {
+                    lateinit var expected: Bitmap
+                    onMain {
+                        for (ratio in ratios) GestureZoomChecks.send(surface, android.view.MotionEvent.ACTION_MOVE,
+                            ratio, x = x, y = y)
+                        check(surface.isNavigating && surface.viewport.transform.scale == ratios.last())
+                        expected = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+                        surface.drawFrame(android.graphics.Canvas(expected))
+                    }
+                    try {
+                        val deadlineForZoom = android.os.SystemClock.uptimeMillis() + 5000
+                        while (true) {
+                            val actual = copySurface()
+                            val matches = try { equivalent(actual, expected) } finally { actual.recycle() }
+                            if (matches) break
+                            check(android.os.SystemClock.uptimeMillis() < deadlineForZoom) {
+                                "Canvas did not repaint live zoom before finger lift at $angle degrees"
+                            }
+                            Thread.sleep(20)
+                        }
+                    } finally { expected.recycle() }
+                }
+                onMain {
+                    GestureZoomChecks.send(surface, android.view.MotionEvent.ACTION_CANCEL, x = x, y = y)
+                    check(!surface.isNavigating && surface.viewport.transform.scale == 1f)
+                    surface.inputEnabled = false
+                }
+            }
             for (angle in listOf(0f, 37f)) {
                 onMain { surface.createDocument(CanvasSpec(260, 260)); surface.rotateView(angle); surface.zoom(ZoomAction.ACTUAL) }
                 repeat(3) { i ->

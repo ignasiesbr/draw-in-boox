@@ -56,7 +56,37 @@ object GestureRotationChecks {
             send(view, MotionEvent.ACTION_UP, angle)
         }
 
+        // Fresh surfaces ignore twist, even when it accompanies a pinch or pan.
         val initial = view.viewport.transform
+        check(!view.rotationGestureEnabled)
+        start()
+        send(view, MotionEvent.ACTION_MOVE, 30f)
+        check(!view.isNavigating && view.rotationPreviewAngle == null && view.viewport.transform == initial)
+        release(30f)
+        start()
+        GestureZoomChecks.send(view, MotionEvent.ACTION_MOVE, 1.6f, 30f, x = 200f, y = 200f)
+        check(view.zoomPreviewLevel != null && view.rotationPreviewAngle == null)
+        check(view.viewport.rotationDegrees == 37.25f)
+        send(view, MotionEvent.ACTION_CANCEL, 30f)
+        val beforePan = view.viewport.transform
+        start()
+        GestureZoomChecks.send(view, MotionEvent.ACTION_MOVE, degrees = 30f, x = 240f, y = 220f)
+        check(view.isNavigating && view.zoomPreviewLevel == null && view.rotationPreviewAngle == null)
+        check(abs(view.viewport.transform.x - beforePan.x - 40f) < 0.002f)
+        check(abs(view.viewport.transform.y - beforePan.y - 20f) < 0.002f)
+        send(view, MotionEvent.ACTION_CANCEL, 30f)
+        // Disabling an active, opted-in rotation discards its selection.
+        view.configureRotationGesture(true)
+        start()
+        send(view, MotionEvent.ACTION_MOVE, 30f)
+        check(view.rotationPreviewAngle != null)
+        view.configureRotationGesture(false)
+        check(!view.isNavigating && view.rotationPreviewAngle == null && view.viewport.rotationDegrees == 37.25f)
+        view.configureRotationGesture(true)
+        // Restore the original position after testing live pan above.
+        view.viewport.panBy(-40f, -20f)
+        began = 0; ended = 0
+        val enabledInitial = view.viewport.transform
         view.rawInput = true
         start()
         send(view, MotionEvent.ACTION_MOVE, 3f)
@@ -64,9 +94,9 @@ object GestureRotationChecks {
         send(view, MotionEvent.ACTION_MOVE, 30f, reversed = true)
         check(began == 1 && view.isNavigating && !view.rawInput)
         check(view.rotationPreviewAngle == 67f)
-        check(view.viewport.transform == initial) { "Twist redrew/rotated the document before release" }
+        check(view.viewport.transform == enabledInitial) { "Twist redrew/rotated the document before release" }
         send(view, MotionEvent.ACTION_MOVE, 45f)
-        check(view.rotationPreviewAngle == 82f && view.viewport.transform == initial)
+        check(view.rotationPreviewAngle == 82f && view.viewport.transform == enabledInitial)
         // The release sample, not just the last MOVE, determines the final selected number.
         release(60f)
         check(ended == 1 && !view.isNavigating && view.rotationPreviewAngle == null)

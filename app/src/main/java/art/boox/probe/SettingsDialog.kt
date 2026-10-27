@@ -72,6 +72,11 @@ object SettingsDialog {
         val undoGesture = gestureChoice("Undo: two-finger tap", "Undo gesture", settings.undoGestureEnabled)
         val redoGesture = gestureChoice("Redo: two-finger double tap", "Redo gesture", settings.redoGestureEnabled)
         content.addView(TextView(context).apply {
+            text = "Canvas gestures"; textSize = 18f; setTextColor(Color.BLACK)
+            setPadding(0, dp(16), 0, 0)
+        })
+        val rotationGesture = gestureChoice("Rotate: two-finger twist", "Rotation gesture", settings.rotationGestureEnabled)
+        content.addView(TextView(context).apply {
             text = "Advanced"; tag = "Advanced settings"; textSize = 18f; setTextColor(Color.BLACK)
             setPadding(0, dp(24), 0, 0)
         })
@@ -88,6 +93,7 @@ object SettingsDialog {
             val side = choices.entries.first { it.value.id == sides.checkedRadioButtonId }.key
             if (apply(settings.copy(layerPanelSide = side, undoGestureEnabled = undoGesture.isChecked,
                     redoGestureEnabled = redoGesture.isChecked,
+                    rotationGestureEnabled = rotationGesture.isChecked,
                     firmwareCrashGuardEnabled = crashGuard.isChecked))) dialog.dismiss()
         }
         return dialog

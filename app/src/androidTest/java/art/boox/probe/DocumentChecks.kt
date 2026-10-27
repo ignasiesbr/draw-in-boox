@@ -22,7 +22,41 @@ object DocumentChecks {
         presetsAndLimits(context)
         migration(context)
         fixedDocumentAndRestore(context)
+        startupZoom(context)
         corruptCheckpoint(context)
+    }
+
+    private fun startupZoom(context: Context) {
+        val testContext = directory(context, "startup-zoom-${System.nanoTime()}")
+        val view = RasterSurface(testContext, CanvasSpec(800, 600)) { }
+        try {
+            view.surfaceChanged(view.holder, 0, 400, 300)
+            check(view.viewport.transform.scale == 1f && !view.viewport.state().fit) {
+                "Fresh drawing was shrunk to Fit instead of starting at 100%"
+            }
+            check(abs(view.viewport.state().centerX - 400f) < 0.002f &&
+                abs(view.viewport.state().centerY - 300f) < 0.002f)
+            view.zoom(ZoomAction.FIT)
+            check(view.viewport.transform.scale < 1f && view.checkpoint())
+            val fitted = RasterSurface(testContext, CanvasSpec(1, 1)) { }
+            try {
+                fitted.surfaceChanged(fitted.holder, 0, 400, 300)
+                check(fitted.viewport.state().fit && fitted.viewport.transform == view.viewport.transform) {
+                    "Startup discarded a saved Fit view"
+                }
+            } finally { fitted.dispose() }
+            view.createDocument(CanvasSpec(800, 600))
+            check(view.viewport.transform.scale == 1f && !view.viewport.state().fit)
+            view.zoom(ZoomAction.IN)
+            check(view.checkpoint())
+            val zoomed = RasterSurface(testContext, CanvasSpec(1, 1)) { }
+            try {
+                zoomed.surfaceChanged(zoomed.holder, 0, 400, 300)
+                check(zoomed.viewport.transform.scale == 1.25f && !zoomed.viewport.state().fit) {
+                    "Startup discarded saved zoom"
+                }
+            } finally { zoomed.dispose() }
+        } finally { view.dispose(); testContext.filesDir.deleteRecursively() }
     }
 
     private fun rotations() {
@@ -92,10 +126,25 @@ object DocumentChecks {
         }
         viewport.change(ZoomAction.ACTUAL)
         check(viewport.transform.scale == 1f)
+        for (expected in 125..400 step 25) {
+            viewport.change(ZoomAction.IN)
+            check(viewport.transform.scale == expected / 100f) { "Zoom in skipped a 25-point step" }
+        }
+        for (expected in 375 downTo 75 step 25) {
+            viewport.change(ZoomAction.OUT)
+            check(viewport.transform.scale == expected / 100f) { "Zoom out skipped a 25-point step" }
+        }
+        viewport.zoomTo(0.25f, 200f, 150f)
+        check(viewport.transform.scale == 0.75f) { "Manual zoom went below 75%" }
+        viewport.change(ZoomAction.FIT)
+        check(viewport.transform.scale < 0.75f) { "Fit no longer shows the whole large page" }
+        viewport.change(ZoomAction.IN)
+        check(viewport.transform.scale == 0.75f) { "Zoom from Fit did not enter the shared steps" }
+        viewport.change(ZoomAction.ACTUAL)
         viewport.resize(CanvasSpec(800, 600), 300, 400)
         check(viewport.transform.scale == 1f) { "Rotation changed actual-size zoom" }
         repeat(50) { viewport.change(ZoomAction.OUT) }
-        check(viewport.transform.scale > 0f && !viewport.drawingRect().isEmpty)
+        check(viewport.transform.scale == 0.75f && !viewport.drawingRect().isEmpty)
         repeat(50) { viewport.change(ZoomAction.IN) }
         check(viewport.transform.scale == 4f)
         viewport.resize(CanvasSpec(1, 1), 2480, 1294)

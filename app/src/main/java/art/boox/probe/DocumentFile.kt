@@ -12,7 +12,7 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import java.util.zip.CRC32
 
-/** Portable artwork, independent of view state, history, tools and renderer versions.
+/** Portable artwork and optional pen settings, independent of view state, history and renderer versions.
  * See docs/SAVE_FORMAT.md before extending the manifest. Callers freeze edits while writing.
  */
 object DocumentFile {
@@ -24,7 +24,7 @@ object DocumentFile {
 
     fun write(file: File, document: DrawingDocument) {
         val manifest = JSONObject().put("format", "art.boox.document")
-            .put("version", JSONObject().put("major", 1).put("minor", 0))
+            .put("version", JSONObject().put("major", 1).put("minor", 1))
             .put("requiredFeatures", JSONArray().put("raster-layers-v1"))
             .put("id", document.id).put("width", document.spec.width).put("height", document.spec.height)
             .put("selectedLayerId", document.selectedLayerId)
@@ -38,6 +38,7 @@ object DocumentFile {
                 }
             })
         document.spec.ppi?.let { manifest.put("ppi", it) }
+        document.penSettings?.let { manifest.put("penSettings", it.toJson()) }
         val target = AtomicFile(file)
         val output = target.startWrite()
         try {
@@ -150,7 +151,9 @@ object DocumentFile {
                     val info = item.info
                     layers += RasterLayer(bitmap, info.id, info.name, info.locked, info.visible, info.opacity, info.alphaLocked)
                 }
-                DrawingDocument(spec, layers, documentId, selected)
+                DrawingDocument(spec, layers, documentId, selected).apply {
+                    penSettings = PenSettings.fromJson(manifest.optJSONObject("penSettings"))
+                }
             } catch (error: Throwable) { layers.forEach { it.bitmap.recycle() }; throw error }
         }
     }

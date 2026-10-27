@@ -22,6 +22,11 @@ object DocumentFileChecks {
         val changed = File(directory, "changed.boox")
         val source = DrawingDocument.create(CanvasSpec(32, 24, 300))
         try {
+            source.penSettings = PenSettings(pens = BrushPreset.entries.mapIndexed { index, preset ->
+                preset.id to preset.defaults().copy(size = minOf(index + 1f, preset.maxSize),
+                    shade = InkShade.entries[index % InkShade.entries.size],
+                    nativePreviewScale = 0.75f, nativePreviewTexture = NativePreviewTexture.COARSE)
+            }.toMap()).with(BrushPreset.BOOX_PENCIL_FINE.defaults().copy(size = 17f, shade = InkShade.DEEP))
             source.renameLayer(source.layerId, "Paper · 底")
             for (x in 0 until 32) for (y in 0 until 24) source.layer.setPixel(x, y, Color.argb((x * 8 + y) % 256, 0, 0, 0))
             source.addLayer()
@@ -41,6 +46,43 @@ object DocumentFileChecks {
             check(entries.size == source.layers.size + 1)
             check(!manifest.has("viewport") && !manifest.has("history") && !manifest.has("brush"))
             check(manifest.getJSONObject("version").getInt("major") == 1)
+            check(manifest.getJSONObject("version").getInt("minor") == 1)
+            check(manifest.getJSONObject("penSettings").getJSONObject("pens").length() == BrushPreset.entries.size)
+
+            // Original 1.0 files still load without tool metadata, so the editor can seed preferences.
+            val legacy = JSONObject(manifest.toString()).apply {
+                getJSONObject("version").put("minor", 0)
+                remove("penSettings")
+            }
+            rewrite(changed, entries, legacy)
+            DocumentFile.read(changed).also { doc ->
+                try {
+                    check(doc.penSettings == null)
+                    check(doc.layer.sameAs(source.layer))
+                } finally { doc.recycle() }
+            }
+            // Optional tool metadata cannot make raster artwork unreadable on another app version.
+            val futurePens = JSONObject(manifest.toString()).apply {
+                getJSONObject("penSettings").apply {
+                    put("selectedPenId", "future-pen")
+                    getJSONObject("pens").put("future-pen", JSONObject().put("size", 999))
+                    getJSONObject("pens").getJSONObject("ink").put("size", -1).put("shade", 123).put("tilt", "yes")
+                    getJSONObject("pens").remove("monoline")
+                }
+            }
+            rewrite(changed, entries, futurePens)
+            DocumentFile.read(changed).also { doc ->
+                try {
+                    val pens = checkNotNull(doc.penSettings)
+                    check(pens.selectedId == "ink")
+                    check(pens.get(BrushPreset.INK).size == BrushPreset.INK.defaults().size)
+                    check(pens.get(BrushPreset.INK).shade == InkShade.BLACK && !pens.get(BrushPreset.INK).tilt)
+                    check(pens.get(BrushPreset.MONOLINE) == BrushPreset.MONOLINE.defaults())
+                    check(doc.layer.sameAs(source.layer))
+                } finally { doc.recycle() }
+            }
+            rewrite(changed, entries, JSONObject(manifest.toString()).put("penSettings", JSONObject().put("version", 99)))
+            DocumentFile.read(changed).also { try { check(it.penSettings == null) } finally { it.recycle() } }
 
             // A future additive revision is readable; missing optional properties use stable defaults.
             val future = JSONObject(manifest.toString()).apply {
@@ -145,6 +187,8 @@ object DocumentFileChecks {
                 surface.applyLayerCommand(LayerCommand.Add)
                 surface.commit(listOf(PenSample(20f, 20f, 1f, 1)), "test")
                 surface.rotateView(37f)
+                surface.selectBrush(BrushPreset.INK.defaults().copy(size = 3f, shade = InkShade.DEEP))
+                surface.selectBrush(BrushPreset.MONOLINE.defaults().copy(size = 49f, shade = InkShade.PALE))
                 original = surface.document
                 check(actions.onResult(101, Activity.RESULT_OK, Intent().setData(Uri.fromFile(file))))
             }
@@ -154,6 +198,7 @@ object DocumentFileChecks {
             try { same(checkNotNull(original), saved) } finally { saved.recycle() }
             instrumentation.runOnMainSync {
                 surface.applyLayerCommand(LayerCommand.Add)
+                surface.selectBrush(BrushPreset.INK.defaults().copy(size = 10f, shade = InkShade.BLACK))
                 check(surface.history.canUndo)
                 check(actions.onResult(102, Activity.RESULT_OK, Intent().setData(Uri.fromFile(file))))
             }
@@ -163,6 +208,8 @@ object DocumentFileChecks {
                 check(surface.document!!.layers.size == 2)
                 check(!surface.history.canUndo && !surface.history.canRedo)
                 check(surface.viewport.rotationDegrees == 0f && surface.viewport.state().fit)
+                check(surface.brush.settings == BrushPreset.MONOLINE.defaults().copy(size = 49f, shade = InkShade.PALE))
+                check(surface.settingsFor(BrushPreset.INK) == BrushPreset.INK.defaults().copy(size = 3f, shade = InkShade.DEEP))
             }
             val restored = DocumentStore(directory).loadOrCreate(CanvasSpec(1, 1))
             try { same(checkNotNull(surface.document), restored.document) } finally { restored.document.recycle() }
@@ -232,6 +279,7 @@ object DocumentFileChecks {
     private fun same(expected: DrawingDocument, actual: DrawingDocument) {
         check(actual.spec == expected.spec && actual.id == expected.id)
         check(actual.stackState() == expected.stackState())
+        check(actual.penSettings == expected.penSettings) { "Pen settings changed" }
         expected.layers.zip(actual.layers).forEach { (a, b) -> check(a.bitmap.sameAs(b.bitmap)) { "Layer pixels changed" } }
     }
 

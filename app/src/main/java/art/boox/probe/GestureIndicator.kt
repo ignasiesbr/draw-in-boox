@@ -27,7 +27,7 @@ class GestureIndicator(context: Context, private val fastRefresh: (View, Boolean
     }
 
     fun showZoom(level: ZoomLevel?) {
-        show(level?.let { Content(0f, "${it.number} / 7", "${it.percent}% · Lift to zoom") })
+        show(level?.let { Content(0f, "${it.percent}%", "Pinch to zoom") })
     }
 
     private fun show(next: Content?) {

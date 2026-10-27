@@ -65,6 +65,8 @@ object LayerLimits {
 class DrawingDocument(val spec: CanvasSpec, initialLayers: List<RasterLayer>,
     val id: String = UUID.randomUUID().toString(), selectedId: String = initialLayers.first().id) {
     private val stack = initialLayers.toMutableList()
+    // Null identifies legacy artwork with no tool metadata; the editor supplies current defaults.
+    var penSettings: PenSettings? = null
     val layers: List<RasterLayer> get() = stack
     var selectedLayerId = selectedId
         private set
@@ -144,6 +146,21 @@ class DrawingDocument(val spec: CanvasSpec, initialLayers: List<RasterLayer>,
         requireRoom()
         val added = RasterLayer(Bitmap.createBitmap(spec.width, spec.height, Bitmap.Config.ARGB_8888), name = nextName())
         stack.add(stack.indexOf(activeLayer) + 1, added); selectedLayerId = added.id; invalidateComposite()
+    }
+    /** Copy imported pixels into a normal raster layer; caller retains its decoded bitmap. */
+    fun importImage(image: Bitmap, name: String) {
+        requireRoom()
+        require(!image.isRecycled && image.width <= spec.width && image.height <= spec.height)
+        require(name.isNotBlank() && name.length <= MAX_LAYER_NAME_LENGTH && name.none { it.isISOControl() })
+        val pixels = Bitmap.createBitmap(spec.width, spec.height, Bitmap.Config.ARGB_8888)
+        try {
+            Canvas(pixels).drawBitmap(image, ((spec.width - image.width) / 2).toFloat(),
+                ((spec.height - image.height) / 2).toFloat(), null)
+            val added = RasterLayer(pixels, name = name)
+            stack.add(stack.indexOf(activeLayer) + 1, added)
+            selectedLayerId = added.id
+            invalidateComposite()
+        } catch (error: Throwable) { pixels.recycle(); throw error }
     }
     fun duplicateLayer(id: String) {
         requireRoom()
@@ -282,7 +299,9 @@ class DocumentStore(private val directory: File) {
                         layers += RasterLayer(bitmap, layerId, item.optString("name", "Layer ${layers.size + 1}"),
                             item.optBoolean("locked", false), item.optBoolean("visible", true), opacities[index], item.optBoolean("alphaLocked", false))
                     }
-                    DrawingDocument(spec, layers, metadata.getString("id"), selected)
+                    DrawingDocument(spec, layers, metadata.getString("id"), selected).apply {
+                        penSettings = PenSettings.fromJson(metadata.optJSONObject("penSettings"))
+                    }
                 } catch (error: Throwable) { layers.forEach { it.bitmap.recycle() }; throw error }
                 return LoadedDocument(document, viewport)
             }
@@ -310,6 +329,7 @@ class DocumentStore(private val directory: File) {
             } })
             .put("width", document.spec.width).put("height", document.spec.height)
         document.spec.ppi?.let { metadata.put("ppi", it) }
+        document.penSettings?.let { metadata.put("penSettings", it.toJson()) }
         viewport?.let { metadata.put("viewport", JSONObject().put("scale", it.scale)
             .put("centerX", it.centerX).put("centerY", it.centerY).put("fit", it.fit).put("rotationDegrees", it.rotationDegrees)) }
         val target = AtomicFile(file)

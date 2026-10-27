@@ -16,7 +16,7 @@ import android.widget.ImageButton
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL, CALLIGRAPHY, BALLPOINT }
+enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL, CALLIGRAPHY, BALLPOINT, ROTATE_LEFT, ROTATE_RIGHT, FULLSCREEN, SHOW_CONTROLS }
 
 /** Shared monochrome action/toggle. State is model-driven; clicking never silently toggles it.
  * No elevation, ripple or animated state; checked toggles have a 2dp black border. */
@@ -105,6 +105,21 @@ class UiIconDrawable(private val icon: UiIcon) : Drawable() {
             canvas.drawRect(left, top, right, bottom, paint)
         }
         when (icon) {
+            UiIcon.FULLSCREEN -> {
+                line(3f, 9f, 3f, 3f, 9f, 3f); line(15f, 3f, 21f, 3f, 21f, 9f)
+                line(21f, 15f, 21f, 21f, 15f, 21f); line(9f, 21f, 3f, 21f, 3f, 15f)
+            }
+            UiIcon.SHOW_CONTROLS -> {
+                line(3f, 9f, 9f, 9f, 9f, 3f); line(15f, 3f, 15f, 9f, 21f, 9f)
+                line(21f, 15f, 15f, 15f, 15f, 21f); line(9f, 21f, 9f, 15f, 3f, 15f)
+            }
+            UiIcon.ROTATE_LEFT, UiIcon.ROTATE_RIGHT -> {
+                val arrow = canvas.save()
+                if (icon == UiIcon.ROTATE_RIGHT) canvas.scale(-1f, 1f, 12f, 12f)
+                canvas.drawArc(4f, 4f, 21f, 21f, -135f, 285f, false, paint)
+                line(4f, 3f, 4f, 8f, 9f, 8f)
+                canvas.restoreToCount(arrow)
+            }
             UiIcon.CALLIGRAPHY -> {
                 line(3f, 19f, 12f, 4f, 21f, 9f, 12f, 23f, 3f, 19f)
                 line(6f, 14f, 16f, 19f); line(3f, 19f, 12f, 23f)

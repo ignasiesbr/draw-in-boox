@@ -1,6 +1,47 @@
 # Feature maintenance guide
 
-Current UI (`floating-toolbar-v1`): Studio pens and the old top rows are hidden.
+Drawing mode (`drawing-mode-v1`): the four-corners toolbar action hides both
+toolbar and layers. A small top-right Show controls button or Back restores them.
+Mode changes retain surface size, viewport, artwork and expansion state. Native
+exclusions include only visible overlays; while hidden, only the return button
+blocks ink. Explicit changes guard busy input/file work, close/publish and defer
+native reopen after layout. Instance state retains mode across recreation.
+Fresh views and New canvas start at centered 100%; saved checkpoint views restore
+unchanged, including Fit. Portable Open retains upright Fit.
+
+Compact layers (`compact-layers-v1`): a full-workspace canvas sits behind a
+content-height panel overlay. Short lists wrap; long lists scroll above the toolbar.
+Collapsed size is 52x60dp. Both overlays contribute their measured rectangles to
+native exclusions at session open. Panel changes explicitly close/reopen input
+after layout without depending on surface resize, preserving the viewport.
+
+Rotation controls (`rotation-controls-v1`): Settings > Canvas gestures exposes
+Rotate: two-finger twist, default off. The app preference is independent of drawing
+files and is cached in the gesture recognizer. Disabled twist cannot activate or
+win arbitration against pinch/pan. Apply changes it; Cancel does not. Two fixed
+icons at the right end of the floating toolbar rotate -15/+15 degrees through the
+existing guarded viewport/native-reopen path. Pens scroll in the remaining space.
+
+Live zoom (`live-zoom-v1`): pinch repaints the whole visible canvas during contact.
+Pinch and toolbar controls share 75–400% in 25 percentage-point steps; Fit remains
+independent. Navigation keeps one immutable snapshot in flight, remembers only
+the latest pending view and repaints exposed edges. In-flight views finish during
+movement so continuous input cannot starve presentation.
+Release/cancel publish the final/restored view before native input reopens.
+
+Per-pen settings (`pen-settings-v1`): size, shade, dynamics and preview fitting are
+independent per preset. The drawing owns all pens and the selection; portable 1.1
+files and restart checkpoints retain them. Older files inherit current settings;
+new canvases inherit the active set. See SAVE_FORMAT.md for defaults and compatibility.
+The old shared shade migrates into individual preference keys (schema 4).
+
+Image import (`image-import-v1`): Settings → Files → Import image… decodes JPG/PNG
+on the file worker, then inserts a normal raster layer above the selection through
+LayerCommand/structural history on UI. Existing layer opacity fades the image;
+formats remain unchanged. Preserve bounded decode, input freeze, early-result and
+destruction guards. Read IMAGE_IMPORT.md for ownership, budgets and tests.
+
+Floating toolbar UI: Studio pens and the old top rows are hidden.
 BOOX pens, Eraser, Undo, Redo and Settings share an opaque outlined toolbar over
 the bottom of the canvas. Only the pens scroll on narrow canvases; actions stay
 visible. The toolbar does not reserve document/surface space. Its rectangle is
@@ -58,7 +99,7 @@ setter. Software live frames include pending strokes, coalesce snapshots in flig
 and use the worker on both moves and pen-up. See NATIVE_PREVIEW_SAFETY.md; preserving
 the original fast black input path does not mean re-enabling the failed gray shader.
 
-Marker/shade increment: Marker keeps stored ID `monoline` and widens its size range to 128px. `round-marker` draws one round-capped Path for constant-width Marker; pressure/tilt brushes retain continuous-round geometry. `InkShade.kt` defines opaque tones; `InkShadePicker.kt` owns shared draft swatches/dialogs. Shade is global in app preferences (v2), size/dynamics per-preset. Captured brushes carry color through bitmap draw, native color setup and schema-7 diagnostics. Never implement gray as reduced alpha or add per-sample color setters. See BRUSHES.md and MarkerChecks; the accepted asynchronous pipeline remains unchanged.
+Marker/shade increment: Marker keeps stored ID `monoline` and widens its size range to 128px. `round-marker` draws one round-capped Path for constant-width Marker; pressure/tilt brushes retain continuous-round geometry. `InkShade.kt` defines opaque tones; `InkShadePicker.kt` owns shared draft swatches/dialogs. Shade, size, dynamics and preview fitting are per-preset; schema 4 migrates the earlier global shade. Captured brushes carry color through bitmap draw, native color setup and schema-7 diagnostics. Never implement gray as reduced alpha or add per-sample color setters. See BRUSHES.md and MarkerChecks; the accepted asynchronous pipeline remains unchanged.
 
 Physical performance acceptance: on 2026-10-23 the user reported an "incredible difference" with `async-handoff-v1`. Preserve the combined architecture described below and the regression rules in AGENTS.md. Future changes need ordinary-fast and very-fast pen testing; the prior 150ms policy behaved differently at those two cadences.
 
@@ -90,7 +131,7 @@ Start with [HANDOFF.md](HANDOFF.md) for current state and accepted limitations, 
 | Layer controls | `LayerPanel.kt` | Dispatch commands; own no artwork pixels |
 | Shared icon UI | `EinkIconButton.kt` | One action/toggle component and monochrome vector glyph family |
 | App preferences | `AppSettings.kt`, `SettingsDialog.kt` | Independent of document checkpoints and edit history |
-| Deferred navigation badge | `GestureIndicator.kt`, `ZoomLevels.kt` | Small overlay updates; commit chosen transform once on release |
+| Navigation badge and steps | `GestureIndicator.kt`, `ZoomLevels.kt` | Live zoom percentage/25-point steps; deferred rotation angle |
 
 Canvas input is pen-only; fingers operate UI and navigation. Keep raw samples, normalized pressure, view coordinates and document coordinates distinct. Map input through the inverse viewport exactly once. View resizing must never crop/reallocate artwork.
 
@@ -116,7 +157,7 @@ BOOX live ink is firmware-rendered foreground feedback: it can appear above high
 
 Layer limits are intentional: `LayerLimits.maxLayers(spec)` reserves history, two full-size buffers and app overhead, with at most half the heap for layer pixels and a hard count cap of 64. Verified Go103 limits are 7 at 1860x2480 and 3 at A4. Revisit the whole working-memory budget before adding per-layer caches, masks or previews; do not simply raise the cap.
 
-Internal `DocumentStore` v2 archives contain `document.json` and `layers/<id>.png`, preserving order/names/flags/selection and viewport metadata. Version 1 and legacy PNG migration remain supported. Validate dimensions, IDs, viewport values and memory before exposing loaded state; recycle partial allocations on failure. Public save/open now uses the separate portable v1 `.boox` contract in [SAVE_FORMAT.md](SAVE_FORMAT.md), through `DocumentFile` and `DocumentActions`. It omits viewport/tools/history and retains all layer pixels/settings. Keep these two independent version namespaces distinct.
+Internal `DocumentStore` v2 archives contain `document.json` and `layers/<id>.png`, preserving order/names/flags/selection and viewport metadata. Version 1 and legacy PNG migration remain supported. Validate dimensions, IDs, viewport values and memory before exposing loaded state; recycle partial allocations on failure. Public save/open now uses the separate portable v1 `.boox` contract in [SAVE_FORMAT.md](SAVE_FORMAT.md), through `DocumentFile` and `DocumentActions`. It omits viewport/history and retains all layer pixels/settings plus optional per-pen settings and selection (portable 1.1). Keep these two independent version namespaces distinct.
 
 ### Layer opacity and layer settings
 
@@ -138,7 +179,7 @@ For an action, supply a `UiIcon`, meaningful label and click listener. For a tog
 
 Reuse this component for future icon actions/toggles. It provides at least 48dp targets, white background, black vector outlines, disabled glyph treatment, accessibility checked state, content descriptions and tooltips, with no elevation/ripple/state animation. Glyphs live in `UiIcon`/`UiIconDrawable`; no icon library dependency is required. The native-widget lint suppression is deliberate because the Activity uses framework widgets, without AppCompat tinting.
 
-Selected layer rows use `EinkUi.selectionBackground(..., true)` for a solid 2dp black border, not a shadow or faint gray fill. Keep row dimensions stable when selected. The compact top row is Add/Duplicate/Merge/Delete; each layer's lower row is Visibility/Lock/Up/Down. Hide leaves a 52dp expand rail. Expanded panel width is 220dp. Names and thumbnails select; long-pressing a name opens Rename, with accessibility action text. Tooltips explain action icons.
+Selected layer rows use `EinkUi.selectionBackground(..., true)` for a solid 2dp black border, not a shadow or faint gray fill. Keep row dimensions stable when selected. The compact top row is Add/Duplicate/Merge/Delete; each layer's lower row is Visibility/Lock/Up/Down. Hide leaves a 52x60dp expand control. Expanded panel width is 220dp and height wraps its contents, bounded above the toolbar with scrolling for long lists. Names and thumbnails select; long-pressing a name opens Rename, with accessibility action text. Tooltips explain action icons.
 
 When adding UI, follow [EINK_UI.md](EINK_UI.md). Use discrete local updates, readable black outlines and finger-sized targets. Screenshots cannot establish physical ghosting, latency or hardware-preview quality.
 
@@ -148,29 +189,29 @@ When adding UI, follow [EINK_UI.md](EINK_UI.md). Use discrete local updates, rea
 
 `SettingsDialog.show(context, settings, apply)` edits a draft and calls `apply(updated)` only on Apply. Returning false leaves the modal open; Cancel commits nothing. Add future fields through the model/store and labeled dialog sections, preserving unknown-value fallbacks. Avoid creating a separate settings mechanism per feature. Commit listeners are installed immediately after `dialog.show()` so validation is ready without waiting for an asynchronous on-show event.
 
-`MainActivity.arrangeDrawingArea()` moves only `LayerPanel`, preserving the canvas `SurfaceView` attachment, document and expansion state. Changing sides may leave canvas dimensions identical while changing its screen origin. A surface-size callback alone is insufficient. The apply path calls `preparePanelResize()`, updates preferences/layout, then posts `schedulePenConfiguration()` explicitly after layout.
+`MainActivity.arrangeDrawingArea()` places the content-height `LayerPanel` above a full-workspace canvas with top-left/top-right gravity. It preserves the canvas `SurfaceView` attachment, dimensions, origin, viewport, document and expansion state. Panel changes therefore cannot depend on surface-size callbacks: expand/collapse and the side Apply path call `preparePanelResize()` to close input, update layout, then explicitly post `schedulePenConfiguration()` after layout. Layer count/property/history changes already close input and schedule readiness after rebuilding rows. `drawingInputExclusions()` captures the visible panel and toolbar rectangles relative to the surface at session open. Never exclude the unused column beneath a short panel. The panel consumes touches within its own rectangle.
 
 Keep that handshake for future sidebars/toolbars: close raw input before moving the drawing region, let layout settle, reopen using the new origin and clip region. Reject layout changes during a stroke/navigation. Renaming/settings dialogs also trigger focus loss; do not force input open underneath a modal.
 
 ## Navigation and the two different previews
 
-There are two independent preview systems: BOOX pen ink follows the digitizer through the firmware, while `GestureIndicator` is an ordinary Android overlay that displays a proposed zoom/angle. Preserve both when changing rendering. Improving the badge must not replace the low-latency pen path.
+There are two independent preview systems: BOOX pen ink follows the digitizer through the firmware, while `GestureIndicator` is an ordinary Android overlay that displays live zoom or a proposed angle. Preserve both when changing rendering. Improving the badge must not replace the low-latency pen path.
 
 `DocumentViewport` owns scale, translation and clockwise rotation; positive angles rotate clockwise and normalize to [-180,180). Artwork dimensions/pixels and PNG orientation stay unchanged. Fit computes the rotated page bounds; Fit/100% retain the angle. New canvas resets the view. Toolbar Angle accepts arbitrary finite/fractional angles; gesture rotation chooses whole degrees. Bounds can limit center/anchor preservation.
 
-`CanvasGestures` tracks a stable pair of finger IDs. Pan begins beyond Android touch slop and is live. A deliberate twist/pinch can take over; the first selected mode remains locked until the gesture ends. If both thresholds are crossed in one event, normalized gesture strength resolves intent. Keep this ownership policy when adding gestures rather than making independent recognizers compete.
+`CanvasGestures` tracks a stable pair of finger IDs. Pan begins beyond Android touch slop and is live. A deliberate pinch or enabled twist can take over; the first selected mode remains locked until the gesture ends. Rotation is disabled by default through the saved Canvas gestures preference. When enabled and both thresholds are crossed in one event, normalized gesture strength resolves intent. Keep this ownership policy when adding gestures rather than making independent recognizers compete.
 
 | Gesture | Activation | Feedback | Commit |
 | --- | --- | --- | --- |
 | Pan | Two-finger midpoint passes touch slop | Canvas moves live | Already applied; cancelling does not roll back prior pan |
-| Rotate | Twist at least 5 degrees, contacts at least 48dp apart | Canvas freezes; whole badge rotates to the proposed angle | Either finger lifts; apply displayed angle once |
-| Zoom | Starting span at least 48dp, span change beyond touch slop and 15% ratio threshold | Canvas freezes; upright badge shows level and percentage | Either finger lifts; apply displayed level once |
+| Rotate | Opt-in setting on; twist at least 5 degrees, contacts at least 48dp apart | Canvas freezes; whole badge rotates to the proposed angle | Either finger lifts; apply displayed angle once |
+| Zoom | Starting span at least 48dp, span change beyond touch slop and 15% ratio threshold | Whole visible canvas repaints live; upright badge shows percentage | Either finger lifts; retain displayed scale and publish final frame |
 
-Rotation uses the gesture-start angle plus accumulated bearing changes, handling wraparound. Upright snap enters within 4 degrees and stays caught until beyond 7 degrees, using the unrounded target to resist jitter. It commits exactly 0 when displayed; toolbar angle entry is unsnapped.
+Enabled rotation uses the gesture-start angle plus accumulated bearing changes, handling wraparound. Upright snap enters within 4 degrees and stays caught until beyond 7 degrees, using the unrounded target to resist jitter. It commits exactly 0 when displayed; toolbar angle entry is unsnapped.
 
-`ZoomLevels` selects the nearest absolute scale in logarithmic space from gesture-start scale times span ratio. Levels 1-7 are 10%, 25%, 50%, 100%, 150%, 250%, 400%. The zoom anchor is the midpoint when deferred zoom first selects a level; it stays fixed for that selection. There is no reset snap. Toolbar zoom/Fit are separate from these gesture levels.
+`ZoomLevels` selects the closest absolute scale from gesture-start scale times span ratio, in 25 percentage-point steps from 75% through 400%. Toolbar Zoom in/out use the same ordered steps. Fit remains independent and may show a smaller whole page. The zoom anchor is the midpoint when pinch first selects a level; it stays fixed for that selection. There is no reset snap. Whole-screen navigation frames use the immutable surface worker, coalesced on animation frames with one snapshot in flight; newer requests replace pending demand while an in-flight view can finish, avoiding display starvation. Each submission seeds the whole screen. Upright source cropping and memory/synchronous fallback remain. Release/cancel invalidate stale frames and synchronously publish the final view before pen reconfiguration.
 
-Cancellation/focus loss/extra contacts discard pending zoom/angle; rotation also cancels if contacts become too close. Lift navigation contacts before drawing again. Pen input takes priority. `HistoryTapGestures` observes the same stream before navigation: a valid stationary two-finger tap undoes, two consecutive taps redo. Single undo waits the platform double-tap timeout. Navigation begin cancels tap candidates/timers, and cancellation is shared across lifecycle changes. Preserve this arbitration when extending gestures.
+Cancellation/focus loss/extra contacts restore the view at pinch selection (retaining any prior pan) and discard pending rotation; rotation also cancels if contacts become too close. Lift navigation contacts before drawing again. Pen input takes priority. `HistoryTapGestures` observes the same stream before navigation: a valid stationary two-finger tap undoes, two consecutive taps redo. Single undo waits the platform double-tap timeout. Navigation begin cancels tap candidates/timers, and cancellation is shared across lifecycle changes. Preserve this arbitration when extending gestures.
 
 `GestureIndicator` is a sibling overlay above `RasterSurface`, not painted into artwork or the composite cache. Its fixed 280dp square contains the 240x96dp badge at any angle so old corners can be repainted. Angle rotates text and background together; zoom stays upright. Digit redraws coalesce at 33ms; the chosen value updates immediately and is what gets committed, even before the next paint. Per-view DU refresh is enabled while visible and restored on hide, with ordinary Android refresh fallback. Do not enable app-wide fast mode. This is an e-ink interaction choice, not a promise of firmware-ink latency.
 

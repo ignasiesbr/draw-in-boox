@@ -44,30 +44,41 @@ data class BrushSettings(val presetId: String = "tilt", val size: Float = 12f,
         if (tilt && preset != BrushPreset.ERASER) TiltWidthModifier() else NoWidthModifier, this)
 }
 
-/** Versioned app preferences, independent of artwork and undo. */
+/** Versioned defaults for legacy/new documents. Document pen state is authoritative after load. */
 class BrushSettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
     fun selected() = BrushPreset.fromId(preferences.getString("brush_selected", null))
         .takeIf { it in BrushPreset.available } ?: BrushPreset.TILT
     fun load(preset: BrushPreset): BrushSettings {
         val defaults = preset.defaults()
-        if (preferences.getInt("brush_schema", 1) !in 1..3) return defaults
+        if (preferences.getInt("brush_schema", 1) !in 1..4) return defaults
         val size = preferences.getFloat("brush_${preset.id}_size", defaults.size)
         val previewScale = preferences.getFloat("brush_${preset.id}_native_scale", defaults.nativePreviewScale)
         return defaults.copy(size = if (size.isFinite() && size in 1f..preset.maxSize) size else defaults.size,
             pressure = preset != BrushPreset.ERASER && preferences.getBoolean("brush_${preset.id}_pressure", defaults.pressure),
             tilt = preset != BrushPreset.ERASER && preferences.getBoolean("brush_${preset.id}_tilt", defaults.tilt),
-            shade = InkShade.fromLevel(preferences.getInt("ink_gray_level", 0)),
+            shade = InkShade.fromLevel(preferences.getInt("brush_${preset.id}_gray_level",
+                preferences.getInt("ink_gray_level", 0))),
             nativePreviewScale = previewScale.takeIf { it.isFinite() && it in 0.25f..1f } ?: defaults.nativePreviewScale,
             nativePreviewTexture = NativePreviewTexture.fromId(preferences.getString("brush_${preset.id}_native_texture", null)))
     }
     fun save(settings: BrushSettings) {
-        preferences.edit().putInt("brush_schema", 3).putString("brush_selected", settings.presetId)
+        val editor = preferences.edit()
+        // Freeze every legacy shared shade before saving the first independent pen color.
+        // Keep the legacy key unchanged so an untouched pen cannot inherit a later edit.
+        val legacyShade = preferences.getInt("ink_gray_level", 0)
+        BrushPreset.entries.forEach { preset ->
+            val key = "brush_${preset.id}_gray_level"
+            if (!preferences.contains(key)) editor.putInt(key, legacyShade)
+        }
+        editor.putInt("brush_schema", 4).putString("brush_selected", settings.presetId)
             .putFloat("brush_${settings.presetId}_size", settings.size)
             .putBoolean("brush_${settings.presetId}_pressure", settings.pressure)
             .putBoolean("brush_${settings.presetId}_tilt", settings.tilt)
             .putFloat("brush_${settings.presetId}_native_scale", settings.nativePreviewScale)
             .putString("brush_${settings.presetId}_native_texture", settings.nativePreviewTexture.id)
-            .putInt("ink_gray_level", settings.shade.level).apply()
+            .putInt("brush_${settings.presetId}_gray_level", settings.shade.level).apply()
     }
+
+    fun snapshot() = PenSettings(selected().id, BrushPreset.entries.associate { it.id to load(it) })
 }

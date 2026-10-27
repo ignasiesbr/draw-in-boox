@@ -1,5 +1,88 @@
 # Research and handoff
 
+Drawing mode (2026-10-27): current marker `drawing mode v1` / `drawing-mode-v1`.
+New canvases and private drawings with no saved view start centered at 100%.
+Existing checkpoint views, including Fit, still restore; portable Open stays Fit.
+Tap the four-corners icon between Redo and Settings to hide toolbar and layers.
+A small top-right Show controls button or Back restores them, retaining the exact
+viewport, document and panel expansion. Only the small return button excludes
+native ink while hidden. Explicit transitions close input, publish the surface
+and reconfigure after layout; drawing/navigation/pending commits/file work reject
+the change. Mode survives Activity recreation via instance state. Saved guard,
+brush geometry, immutable surface snapshots and accepted 450ms handoff remain.
+Startup/restore and actual overlay/native-exclusion/mode checks were updated.
+Both renderer builds/lint and test-APK compilation pass; device execution and
+physical pen/overlay feedback are pending tablet validation.
+
+Compact layers (2026-10-27): previous marker `compact layers v1` /
+`compact-layers-v1`. Layers now float over a full-workspace canvas at the saved
+left/right side, with height determined by content. Long lists scroll above the
+bottom toolbar; collapse leaves a 52x60dp control. Panel gaps consume touches;
+everything below its measured rectangle remains canvas. Native exclusions capture
+both visible overlays in surface coordinates at session open. Expand/collapse,
+side changes and layer commands retain input-close and deferred reconfiguration;
+surface size/origin and viewport stay fixed on panel changes. Brush geometry,
+saved crash guard, 450ms stroke handoff and immutable worker snapshots are retained.
+Sizing/scrolling checks and actual layout/exclusion checks cover compact/collapsed
+panels and both sides. Both renderer builds/lint and test-APK compilation pass.
+Device execution/physical ink beneath the panel and ordinary
+fast/burst handwriting remain pending tablet validation.
+
+Rotation controls (2026-10-27): previous marker `rotation controls v1` /
+`rotation-controls-v1`. Settings > Canvas gestures > Rotate: two-finger twist
+defaults off (including upgrades with no saved choice); Apply persists the choice,
+Cancel discards it. Disabled twist cannot claim pinch/pan gestures. Rotation remains
+available through the two rightmost toolbar icons, left/right by 15 degrees per
+tap, plus existing Settings view controls. Controls use the existing input-close,
+view publication and deferred reopen path; pending strokes/file operations reject
+rotation. The toolbar's full measured rectangle remains excluded from native ink.
+Accepted pen geometry, crash guard, live zoom and 450ms background handoff remain.
+Settings persistence/UI and disabled/enabled gesture checks were updated. Both
+renderer builds/lint and test-APK compilation pass; device suites and actual
+tablet control/gesture/pen validation remain pending a connected ADB device.
+
+Live zoom (2026-10-27): previous marker `live zoom v1` / `live-zoom-v1`.
+Pinch repaints the complete visible canvas while fingers remain down, using 75%,
+100%, 125% and successive 25-point steps through the existing 400% maximum.
+Settings Zoom in/out share these steps; Fit remains a whole-page command and may
+be smaller than 75%. The badge shows the live percentage. Cancellation restores
+the viewport at pinch selection, preserving an earlier pan. Rotation remains
+deferred. Navigation uses bounded immutable worker snapshots, stale-frame epochs,
+visible-source cropping and the existing memory/synchronous fallback. Final view
+publication precedes native reopen. Brush/native policy, saved crash guard,
+per-stroke history and the accepted 450ms handoff are retained.
+Gesture/control checks and before-lift attached-surface pixel comparisons were
+updated. Both renderer builds/lint and test-APK compilation pass.
+Tablet installation, device suites and physical pinch/ordinary-fast/burst
+pen checks are pending a connected ADB device; no new physical result is claimed.
+
+Per-pen settings (2026-10-25): previous marker `pen settings v1` / `pen-settings-v1`.
+Color now joins size/dynamics/preview fitting as independent per-pen state. Each
+drawing owns the complete set plus selection; portable 1.1 files and private
+checkpoints restore it before pen input reopens. Old files inherit current settings;
+old apps can still read artwork and may discard optional pen metadata on re-save.
+Preference schema 4 migrates shared shade without changing other pens on first edit.
+New canvases inherit current pens. App preferences (including the saved guard)
+remain independent; no stroke-path serialization or handoff changes were added.
+See SAVE_FORMAT.md and BRUSHES.md. Physical pen acceptance limits are unchanged.
+Build/lint and test-APK compilation pass; device execution and installation are
+pending an authorized ADB connection.
+
+Image import (2026-10-25): checkpoint `64a77f1` preserves the floating toolbar and
+landscape default before this feature. Its marker was `image import v1` in
+Settings / `image-import-v1` in logs. Settings → Files → Import image… accepts
+JPG/PNG, fits and centers without cropping, and adds a named raster layer above
+the selection. Existing layer opacity controls fade it; import/opacity have
+separate history actions and persist in existing formats. Decode is bounded and
+off UI, artwork/history changes stay on UI with input closed. Read IMAGE_IMPORT.md
+for ownership, limits, failure behavior and focused checks. Native policy, the
+saved crash-guard value and accepted 450ms/background handoff remain unchanged.
+Both renderer builds/lint, focused image-import checks and the full recovered
+Go103 suite pass. Actual Downloads picker import and 50% layer opacity were
+checked on the tablet; the test import was undone and original checkpoint metadata
+and layer PNG bytes matched the pre-test backup. Captures and logs are under
+`captures/image-import-v1`. Physical pen responsiveness is not newly measured.
+
 Default document size (2026-10-25): the first BOOX preset is now landscape,
 2480 × 1860 pixels, for both first-launch creation and the New canvas dialog.
 Existing checkpoints/imported drawings retain their dimensions. The dialog's
@@ -60,7 +143,7 @@ NATIVE_PREVIEW_CALIBRATION.md for migration, known tone limits and switch detail
 
 Portable save/open: **Files → Save a copy… / Open drawing…** uses Android document
 providers and `.boox` ZIP/JSON/PNG files. All raster layers/settings and selection
-round-trip; portable files omit tools, viewport and history. The separate internal
+round-trip; portable 1.1 files include pen settings and omit viewport/history. The separate internal
 checkpoint still handles restart. New/Open offer Save & continue or explicit discard.
 Read [SAVE_FORMAT.md](SAVE_FORMAT.md) for version/default/required-feature rules,
 validation limits, worker ownership, atomic-save boundaries and tests. The accepted
@@ -246,7 +329,7 @@ History gesture fallback: the user could not activate three-finger undo. The tou
 
 Initial session history is implemented. The user reported three-finger taps did not work; the current fallback uses two-finger taps and still needs physical confirmation. Up to 10 raster edit actions (strokes and Clear), capped at min(32MiB, heap/8) compressed storage. `DocumentEdit` declares affected regions and applies edits; `EditHistory` captures lossless before/after 128px tiles, storing only changed tiles. This also supports future fill/cut raster mutations without replaying tools. New edits discard redo; no-ops do not. Navigation is excluded. New canvas/process restart resets the stack; pause-time checkpoint saves current pixels but not history. Undo/Redo toolbar buttons use the same guarded BOOX close/render/reopen lifecycle as navigation. Two-finger single tap waits the platform double-tap timeout (~300ms) before undo; two consecutive valid chords redo directly without intermediate undo. Chord join is <=250ms, total duration <=450ms, no motion beyond touch slop; pen/navigation, extra contacts and lifecycle changes cancel candidates/timers. `HistoryChecks` and virtual-time `HistoryTapChecks` pass alongside all existing device checks; build/lint pass. User confirmed the previous pinch implementation works. Keep testing physical responsiveness, gesture recognition and pressure preview after history changes.
 
-Deferred pinch zoom is implemented; physical validation is pending. Levels 1–7 are 10%, 25%, 50%, 100%, 150%, 250%, 400%. `ZoomLevels` selects the closest absolute scale by logarithmic distance from starting zoom times finger-span ratio. Pinch requires 15% distance change and touch slop, with a starting span of at least 48dp. The first deliberate pinch/twist locks its selection mode; panning can precede either. Shared `GestureIndicator` displays the zoom level/percentage upright or the rotation target as a rotated badge. During either selection the document stays still; normal release applies once, cancellation/focus loss/third contact discards. Zoom is anchored at the midpoint where selection started and preserves angle; bounds can limit anchoring. BOOX raw input is suspended once per session and restored afterward, preserving its responsive fountain preview. Build/lint and device tests pass, including all existing rotation/snap/pan checks plus zoom levels/limits, deferred release, rotated anchoring, mode ownership, cancellation, pen priority, post-zoom pen coordinates, unchanged pixels and persistence. No new dependency or zero/reset snap for zoom.
+Historical deferred zoom (superseded by live-zoom-v1 above): physical validation was pending. Levels 1–7 are 10%, 25%, 50%, 100%, 150%, 250%, 400%. `ZoomLevels` selects the closest absolute scale by logarithmic distance from starting zoom times finger-span ratio. Pinch requires 15% distance change and touch slop, with a starting span of at least 48dp. The first deliberate pinch/twist locks its selection mode; panning can precede either. Shared `GestureIndicator` displays the zoom level/percentage upright or the rotation target as a rotated badge. During either selection the document stays still; normal release applies once, cancellation/focus loss/third contact discards. Zoom is anchored at the midpoint where selection started and preserves angle; bounds can limit anchoring. BOOX raw input is suspended once per session and restored afterward, preserving its responsive fountain preview. Build/lint and device tests pass, including all existing rotation/snap/pan checks plus zoom levels/limits, deferred release, rotated anchoring, mode ownership, cancellation, pen priority, post-zoom pen coordinates, unchanged pixels and persistence. No new dependency or zero/reset snap for zoom.
 
 Upright snap added to deferred twist selection: enter 0 degrees when the unrounded normalized target is within +/-4 degrees, stay snapped until outside +/-7 degrees, and commit exactly the displayed 0 on release. Snap state resets on gesture begin/end/cancel. Toolbar exact-angle entry remains unsnapped. Tests cover approach from both directions, jitter/release, cancellation/session isolation and bearing wraparound. Physical confirmation of snap feel is pending.
 

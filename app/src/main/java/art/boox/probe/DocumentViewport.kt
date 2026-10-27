@@ -47,7 +47,7 @@ class DocumentViewport {
     private val fitScale: Float get() = rotatedBounds.let {
         minOf(4f, (viewWidth - 32f).coerceAtLeast(1f) / it.width(), (viewHeight - 32f).coerceAtLeast(1f) / it.height())
     }
-    private val minScale: Float get() = minOf(0.1f, fitScale)
+    private val minScale: Float get() = minOf(ZoomLevels.MIN_SCALE, fitScale)
 
     fun resize(spec: CanvasSpec, width: Int, height: Int, restored: ViewportState? = null) {
         require(width > 0 && height > 0)
@@ -72,7 +72,7 @@ class DocumentViewport {
     /** Keep the selected document point under the pinch midpoint, subject to bounds. */
     fun zoomTo(scale: Float, anchorX: Float, anchorY: Float) {
         require(scale.isFinite() && scale > 0f && anchorX.isFinite() && anchorY.isFinite())
-        val zoom = scale.coerceIn(minScale, 4f)
+        val zoom = scale.coerceIn(ZoomLevels.MIN_SCALE, ZoomLevels.MAX_SCALE)
         val anchor = transform.toDocument(anchorX, anchorY)
         val scaled = ViewTransform(zoom, 0f, 0f, rotationDegrees).toView(anchor.x, anchor.y)
         val proposed = ViewTransform(zoom, anchorX - scaled.x, anchorY - scaled.y, rotationDegrees)
@@ -102,8 +102,8 @@ class DocumentViewport {
             else -> {
                 val current = state()
                 val scale = when (action) {
-                    ZoomAction.IN -> transform.scale * 1.25f
-                    ZoomAction.OUT -> transform.scale / 1.25f
+                    ZoomAction.IN -> ZoomLevels.next(transform.scale)
+                    ZoomAction.OUT -> ZoomLevels.previous(transform.scale)
                     else -> 1f
                 }
                 fitted = false

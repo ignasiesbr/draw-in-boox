@@ -15,6 +15,7 @@ import kotlin.math.abs
 class RasterSurface(
     context: Context,
     private val defaultSpec: CanvasSpec = CanvasSizes.presets.first().spec,
+    initialPenSettings: PenSettings = PenSettings(selectedId = "tilt"),
     private val strokeFinished: (PenStroke) -> Unit
 ) : SurfaceView(context), SurfaceHolder.Callback {
     var document: DrawingDocument? = null
@@ -27,6 +28,8 @@ class RasterSurface(
     var historyChanged: (() -> Unit)? = null
     var historyFeedback: ((String) -> Unit)? = null
     private val store = DocumentStore(context.filesDir)
+    private var penSettings = initialPenSettings
+    fun settingsFor(preset: BrushPreset) = penSettings.get(preset)
     private val pending = mutableListOf<PenSample>()
     private var activePointer = -1
     private var rawStroke = false
@@ -72,7 +75,13 @@ class RasterSurface(
     private var navigationStartAngle = 0f
     private var navigationStartScale = 1f
     private var zoomAnchor = PointF()
+    private var zoomStartState: ViewportState? = null
+    private var navigationEpoch = 0L
+    private var navigationFrameInFlight = false
+    private var navigationNeedsFrame = false
     private var rotationSnappedToZero = false
+    var rotationGestureEnabled = false
+        private set
     val isNavigating: Boolean get() = gestures.active
     private val gestures = CanvasGestures(ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
         minRotationSpan = 48f * resources.displayMetrics.density,
@@ -81,12 +90,16 @@ class RasterSurface(
             else {
                 navigationStartAngle = viewport.rotationDegrees
                 navigationStartScale = viewport.transform.scale
+                navigationEpoch++
+                zoomStartState = null
+                navigationFrameInFlight = false
+                navigationNeedsFrame = false
                 rotationSnappedToZero = false
                 historyTaps.cancel()
                 navigationStarted?.invoke(); true
             }
         },
-        pan = { dx, dy -> viewport.panBy(dx, dy); requestFrame() },
+        pan = { dx, dy -> viewport.panBy(dx, dy); requestNavigationFrame() },
         rotation = { delta ->
             val target = DocumentViewport.normalizeAngle(navigationStartAngle + delta)
             // Enter within 4 degrees; stay caught until 7 degrees to resist finger jitter.
@@ -100,25 +113,37 @@ class RasterSurface(
             }
         },
         zoom = { ratio, x, y ->
-            if (zoomPreviewLevel == null) zoomAnchor = PointF(x, y)
+            if (zoomPreviewLevel == null) {
+                zoomAnchor = PointF(x, y)
+                zoomStartState = viewport.state()
+            }
             val level = ZoomLevels.nearest(navigationStartScale * ratio)
             if (level != zoomPreviewLevel) {
                 zoomPreviewLevel = level
+                viewport.zoomTo(level.scale, zoomAnchor.x, zoomAnchor.y)
+                requestNavigationFrame()
                 zoomPreviewChanged?.invoke(level)
             }
         },
         end = { commit ->
             val angle = rotationPreviewAngle
-            val zoom = zoomPreviewLevel
+            // Cancel restores the view at pinch selection, including any earlier pan.
+            if (!commit) zoomStartState?.let { state ->
+                document?.let { viewport.resize(it.spec, viewport.viewWidth, viewport.viewHeight, state) }
+            }
+            zoomStartState = null
+            navigationEpoch++
+            navigationNeedsFrame = false
+            navigationFrameInFlight = false
+            removeCallbacks(frame); framePending = false
             rotationPreviewAngle = null
             zoomPreviewLevel = null
             rotationSnappedToZero = false
             rotationPreviewChanged?.invoke(null)
             zoomPreviewChanged?.invoke(null)
             if (commit && angle != null) viewport.rotateTo(angle)
-            if (commit && zoom != null) viewport.zoomTo(zoom.scale, zoomAnchor.x, zoomAnchor.y)
             render(); ready?.invoke()
-        })
+        }, rotationEnabled = { rotationGestureEnabled })
     var error: ((String) -> Unit)? = null
     var undoGestureEnabled = true
         private set
@@ -140,6 +165,13 @@ class RasterSurface(
         redoGestureEnabled = redoEnabled
     }
 
+    fun configureRotationGesture(enabled: Boolean) {
+        if (rotationGestureEnabled == enabled) return
+        historyTaps.cancel()
+        gestures.cancel()
+        rotationGestureEnabled = enabled
+    }
+
     init { tag = "Drawing surface"; holder.addCallback(this) }
 
     override fun surfaceCreated(holder: SurfaceHolder) = render()
@@ -151,9 +183,16 @@ class RasterSurface(
         cancelStroke()
         try {
             val loaded = if (document == null) store.loadOrCreate(defaultSpec) else null
-            if (loaded != null) document = loaded.document
+            if (loaded != null) {
+                document = loaded.document
+                restorePenSettings(loaded.document)
+            }
             if (loaded != null) layersChanged?.invoke()
-            viewport.resize(checkNotNull(document).spec, width, height, loaded?.viewport)
+            val spec = checkNotNull(document).spec
+            val restored = loaded?.let {
+                it.viewport ?: ViewportState(1f, spec.width / 2f, spec.height / 2f, false)
+            }
+            viewport.resize(spec, width, height, restored)
             render()
             ready?.invoke()
         } catch (failure: Exception) {
@@ -168,14 +207,27 @@ class RasterSurface(
         check(!isDrawing && !isNavigating) { "Finish drawing or navigation before creating a canvas." }
         document?.releaseComposite()
         val replacement = DrawingDocument.create(spec)
+        replacement.penSettings = penSettings
         try { store.save(replacement, null) } catch (failure: Throwable) { replacement.recycle(); throw failure }
-        installDocument(replacement)
+        installDocument(replacement, fit = false)
     }
 
-    internal fun checkpointReplacement(replacement: DrawingDocument) = store.save(replacement, null)
+    internal fun checkpointReplacement(replacement: DrawingDocument) {
+        // Explicit Open freezes the editor; seed legacy files before their restart checkpoint.
+        if (replacement.penSettings == null) replacement.penSettings = penSettings
+        store.save(replacement, null)
+    }
+
+    private fun restorePenSettings(current: DrawingDocument) {
+        penSettings = current.penSettings ?: penSettings
+        current.penSettings = penSettings
+        val selected = BrushPreset.fromId(penSettings.selectedId)
+            .takeIf { it in BrushPreset.available } ?: BrushPreset.INK
+        brush = penSettings.get(selected).compile()
+    }
 
     /** Takes ownership only after a complete import. Caller has frozen edits and saved a checkpoint. */
-    fun installDocument(replacement: DrawingDocument) {
+    fun installDocument(replacement: DrawingDocument, fit: Boolean = true) {
         check(!isDrawing && !isNavigating) { "Finish drawing or navigation before opening a drawing." }
         viewportWillChange?.invoke()
         historyTaps.cancel()
@@ -183,11 +235,12 @@ class RasterSurface(
         history.clear(); historyChanged?.invoke()
         document?.recycle()
         document = replacement
+        restorePenSettings(replacement)
         layersChanged?.invoke()
         loadFailed = false
         val spec = replacement.spec
         viewport.resize(spec, viewport.viewWidth.coerceAtLeast(1), viewport.viewHeight.coerceAtLeast(1),
-            ViewportState(1f, spec.width / 2f, spec.height / 2f, true))
+            ViewportState(1f, spec.width / 2f, spec.height / 2f, fit))
         render()
         ready?.invoke()
     }
@@ -218,6 +271,8 @@ class RasterSurface(
         val compiled = settings.compile()
         viewportWillChange?.invoke()
         brush = compiled
+        penSettings = penSettings.with(settings)
+        document?.penSettings = penSettings
         ready?.invoke()
         return true
     }
@@ -458,6 +513,21 @@ class RasterSurface(
 
     private fun renderScheduledFrame() {
         framePending = false
+        if (isNavigating) {
+            if (!navigationNeedsFrame || navigationFrameInFlight) return
+            navigationNeedsFrame = false
+            navigationFrameInFlight = true
+            val epoch = navigationEpoch
+            val current = document ?: return
+            invalidateAsyncFrames()
+            renderAsync(RectF(0f, 0f, current.spec.width.toFloat(), current.spec.height.toFloat())) {
+                if (epoch == navigationEpoch) {
+                    navigationFrameInFlight = false
+                    if (navigationNeedsFrame) requestFrame()
+                }
+            }
+            return
+        }
         if (!softwareNeedsFrame) { render(); return }
         if (softwareFrameInFlight) return
         softwareNeedsFrame = false
@@ -492,6 +562,14 @@ class RasterSurface(
         // sample list while the worker paints; its completion snapshots the latest.
         if (softwareNeedsFrame && softwareFrameInFlight) return
         if (!framePending) { framePending = true; postOnAnimation(frame) }
+    }
+
+    private fun requestNavigationFrame() {
+        // View changes need a full screen seed, including exposed gray/paper edges.
+        // Let the in-flight view finish so continuous movement cannot starve display.
+        // Snapshot the latest after it completes; end/lifecycle still cancel old jobs.
+        navigationNeedsFrame = true
+        if (!navigationFrameInFlight) requestFrame()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

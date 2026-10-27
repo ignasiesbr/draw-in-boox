@@ -18,14 +18,24 @@ The exact border width, icon size, use of a selected outline, and tooltip policy
 
 The panel can live on either side, with right as the default. Preserve the user's side preference independently from document data. Collapsing leaves an accessible expand control on the chosen side. Use the same selection border on either side.
 
+The panel overlays a full-workspace canvas and uses only its content height.
+Long lists scroll above the bottom toolbar; collapse leaves a 52x60dp control.
+Its measured rectangle consumes touches and excludes native ink. Space below
+the panel remains canvas; do not reserve a full-height sidebar column.
+
 Keep layer names at least 14sp. Long-pressing the name opens rename; retain a visible dialog title, a labeled text field, and explicit confirmation/cancel actions. Accessibility should describe the long-press action so renaming can be discovered without guessing the gesture.
 
 Settings should use a dedicated settings model and one settings dialog entry point, with labeled sections as options grow. Avoid placing application preferences in artwork checkpoints or adding a separate preference mechanism for every feature.
 
 The drawing toolbar floats above the bottom of the canvas, with an opaque white
 background, a black outline and no shadow or animation. BOOX pens scroll on
-narrow canvases; Eraser, Undo, Redo and Settings stay visible. Studio tools and
-the old top control rows are hidden. Native ink excludes the toolbar rectangle.
+narrow canvases; Eraser, Undo, Redo, Settings and rotate-left/right stay visible.
+Studio tools and the old top control rows are hidden. Native ink excludes the
+actual toolbar and layers panel rectangles.
+The four-corners action hides both overlays for drawing. Only a 52dp Show controls
+button at top right remains; that button or Back restores the controls. Keep the
+same viewport and exclude only the visible return button from native ink while
+hidden. Changes happen explicitly while idle, never automatically per stroke.
 Undo and Redo use outline arrows, accessible names and disabled states when their
 history stack is empty. Clear is under Settings and retains its confirmation.
 Under Settings → History gestures, Undo (two-finger tap) and Redo (two-finger
@@ -39,7 +49,7 @@ double-tap redo does not fall through into undo. Preferences use Apply/Cancel.
 - Update controls when state changes; avoid periodic redraws. Preserve the drawing engine's BOOX hardware ink path when adding UI feedback.
 - Keep feedback local where practical. A toggle updates its glyph/border; a rename updates the row. Do not force a full-screen cleanup refresh for every tap.
 - Keep explicit refresh available for accumulated ghosting. Changing BOOX update modes is a device integration decision and requires physical testing; a faster mode can trade away detail or increase ghosting.
-- Our deferred angle/zoom indicators are a deliberate interaction choice: show a small changing target value, then apply the document transform once on release. Do not add continuous canvas transforms solely for visual polish.
+- Twist rotation is opt-in and deferred: show the proposed angle, then apply on release. Pinch zoom now updates the full visible canvas during contact, in 25 percentage-point steps from 75% to 400%, with bounded immutable worker snapshots. Keep local refresh behavior and the native pen handoff intact.
 
 ## Review on the tablet
 

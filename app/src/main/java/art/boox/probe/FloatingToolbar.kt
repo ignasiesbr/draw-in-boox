@@ -6,7 +6,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.widget.LinearLayout
 
-/** Opaque canvas overlay. Pens can scroll while history and settings stay in reach. */
+/** Opaque canvas overlay. Pens scroll while history, settings and rotation stay in reach. */
 class FloatingToolbar(context: Context, private val preferredWidth: Int) : LinearLayout(context) {
     init {
         tag = "Floating toolbar"

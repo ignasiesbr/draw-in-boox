@@ -1,5 +1,7 @@
 package art.boox.probe
 
+import android.graphics.Bitmap
+
 /** Structural commands identify pixels needing backup; unchanged layers are never copied. */
 sealed interface LayerCommand {
     val label: String
@@ -9,6 +11,10 @@ sealed interface LayerCommand {
     data object Add : LayerCommand {
         override val label = "Add layer"
         override fun apply(document: DrawingDocument) = document.addLayer()
+    }
+    data class ImportImage(val image: Bitmap, val name: String) : LayerCommand {
+        override val label = "Import image"
+        override fun apply(document: DrawingDocument) = document.importImage(image, name)
     }
     data class Duplicate(val id: String) : LayerCommand {
         override val label = "Duplicate layer"

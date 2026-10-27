@@ -34,8 +34,11 @@ class LayerPanel(context: Context, initiallyExpanded: Boolean,
 
     init {
         tag = "Layer panel"; orientation = VERTICAL; setBackgroundColor(Color.WHITE)
+        // Consume the panel's gaps/header, while space below its measured bounds
+        // remains available to the full-size drawing surface behind it.
+        isClickable = true
         addView(show, LayoutParams(dp(52), dp(60)))
-        addView(expanded, LayoutParams(-1, -1))
+        addView(expanded, LayoutParams(-1, -2))
         val header = LinearLayout(context)
         header.addView(TextView(context).apply {
             text = "Layers"; textSize = 20f; setTextColor(Color.BLACK)
@@ -59,7 +62,7 @@ class LayerPanel(context: Context, initiallyExpanded: Boolean,
         action("Merge down", UiIcon.MERGE_DOWN) { LayerCommand.MergeDown(it.layerId) }
         action("Delete", UiIcon.DELETE) { LayerCommand.Delete(it.layerId) }
         expanded.addView(actions)
-        expanded.addView(ScrollView(context).apply { addView(rows) }, LayoutParams(-1, 0, 1f))
+        expanded.addView(ScrollView(context).apply { addView(rows) }, LayoutParams(-1, -2))
         updateExpansion()
     }
 

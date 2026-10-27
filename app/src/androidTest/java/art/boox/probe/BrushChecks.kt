@@ -53,6 +53,18 @@ object BrushChecks {
                 .putFloat("brush_ink_size", Float.NaN).commit()
             check(store.selected() == BrushPreset.TILT && store.load(BrushPreset.INK).size == 12f)
 
+            // Migrate the old global shade once, then preserve independent colors across restarts.
+            val prefs = isolated.getSharedPreferences("", 0)
+            prefs.edit().clear().putInt("brush_schema", 3).putInt("ink_gray_level", InkShade.MEDIUM.level).commit()
+            check(store.load(BrushPreset.INK).shade == InkShade.MEDIUM)
+            store.save(BrushPreset.INK.defaults().copy(size = 5f, shade = InkShade.DEEP))
+            check(store.load(BrushPreset.MONOLINE).shade == InkShade.MEDIUM)
+            store.save(BrushPreset.MONOLINE.defaults().copy(size = 64f, shade = InkShade.LIGHT))
+            check(BrushSettingsStore(isolated).load(BrushPreset.INK).shade == InkShade.DEEP)
+            check(store.load(BrushPreset.MONOLINE).shade == InkShade.LIGHT)
+            check(store.load(BrushPreset.BOOX_PENCIL_FINE).shade == InkShade.MEDIUM)
+            prefs.edit().clear().commit()
+
             val strokes = mutableListOf<PenStroke>()
             val surface = RasterSurface(isolated, CanvasSpec(128, 128)) { strokes += it }
             try {
@@ -69,6 +81,30 @@ object BrushChecks {
                 check(surface.undo()); check(surface.redo())
                 check(surface.document!!.layer.sameAs(pixels))
                 pixels.recycle()
+
+                val inkSettings = BrushPreset.INK.defaults().copy(size = 4.5f, shade = InkShade.DEEP, tilt = true)
+                val markerSettings = BrushPreset.MONOLINE.defaults().copy(size = 55f, shade = InkShade.LIGHT)
+                check(surface.selectBrush(inkSettings))
+                check(surface.selectBrush(markerSettings))
+                check(surface.settingsFor(BrushPreset.INK) == inkSettings)
+                check(surface.selectBrush(surface.settingsFor(BrushPreset.INK)))
+                val savedPens = surface.document!!.penSettings
+                check(surface.checkpoint())
+                DocumentStore(isolated.filesDir).loadOrCreate(CanvasSpec(1, 1)).document.also {
+                    try { check(it.penSettings == savedPens) } finally { it.recycle() }
+                }
+                val replacement = DrawingDocument.create(CanvasSpec(128, 128)).apply {
+                    penSettings = PenSettings().with(markerSettings.copy(size = 75f, shade = InkShade.BLACK))
+                }
+                surface.installDocument(replacement)
+                check(surface.brush.settings == markerSettings.copy(size = 75f, shade = InkShade.BLACK))
+                check(surface.settingsFor(BrushPreset.INK) == BrushPreset.INK.defaults())
+                surface.createDocument(CanvasSpec(128, 128))
+                check(surface.brush.settings == replacement.penSettings!!.get(BrushPreset.MONOLINE))
+                val legacy = DrawingDocument.create(CanvasSpec(128, 128))
+                surface.installDocument(legacy)
+                check(surface.brush.settings == markerSettings.copy(size = 75f, shade = InkShade.BLACK))
+                check(legacy.penSettings != null)
             } finally { surface.dispose() }
         } finally {
             context.deleteSharedPreferences(preferenceName)

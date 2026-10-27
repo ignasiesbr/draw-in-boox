@@ -149,8 +149,18 @@ class EditHistory(
         val before = document.stackState()
         val affected = command.affectedPixels(document)
         val oldPixels = captureLayers(document, affected, maxBytes)
-        try { command.apply(document) }
-        catch (error: Exception) {
+        val after: LayerStackState
+        val newPixels: Map<String, List<Patch>>?
+        try {
+            command.apply(document)
+            after = document.stackState()
+            if (before == after) return false
+            // Only Add guarantees a transparent layer. Imported pixels must survive redo.
+            val inserted = if (command == LayerCommand.Add) emptySet()
+                else after.layers.map { it.id }.toSet() - before.layers.map { it.id }.toSet()
+            val oldBytes = oldPixels?.values?.sumOf { patches -> patches.sumOf { it.bytes.size.toLong() + 64 } } ?: maxBytes
+            newPixels = captureLayers(document, (affected + inserted).filter { document.findLayer(it) != null }.toSet(), maxBytes - oldBytes)
+        } catch (error: Throwable) {
             // Commands validate/allocate before mutation. Restore retained pixels if needed.
             if (oldPixels != null && document.stackState() != before) {
                 document.restoreStack(before)
@@ -159,13 +169,6 @@ class EditHistory(
             document.invalidateComposite()
             throw error
         }
-        val after = document.stackState()
-        if (before == after) return false
-        // Added layers are known transparent; redo can allocate them without pixel backups.
-        val inserted = if (command == LayerCommand.Add) emptySet()
-            else after.layers.map { it.id }.toSet() - before.layers.map { it.id }.toSet()
-        val oldBytes = oldPixels?.values?.sumOf { patches -> patches.sumOf { it.bytes.size.toLong() + 64 } } ?: maxBytes
-        val newPixels = captureLayers(document, (affected + inserted).filter { document.findLayer(it) != null }.toSet(), maxBytes - oldBytes)
         if (oldPixels == null || newPixels == null) clear()
         else append(StackEntry(document.id, command.label, before, after, oldPixels, newPixels))
         return true

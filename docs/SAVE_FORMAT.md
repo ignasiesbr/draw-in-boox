@@ -1,4 +1,4 @@
-# Portable drawings (.boox), version 1.0
+# Portable drawings (.boox), version 1.1
 
 The Files button offers **Save a copy…**, **Open drawing…**, and **Export PNG**.
 Save creates an editable `.boox` file through Android's document picker, in local
@@ -35,7 +35,7 @@ This is an example manifest (IDs are illustrative):
 ```json
 {
   "format": "art.boox.document",
-  "version": { "major": 1, "minor": 0 },
+  "version": { "major": 1, "minor": 1 },
   "requiredFeatures": ["raster-layers-v1"],
   "id": "document-id",
   "width": 1860,
@@ -63,10 +63,34 @@ document pixels; optional PPI is a positive integer describing physical size.
 Opacity is an integer percent, 0–100 inclusive. All layers and their original
 transparency survive, including locked, hidden, alpha-locked and zero-opacity layers.
 
-Current tool settings, app preferences, viewport position/zoom/rotation, and undo/
-redo history are omitted. Opening selects the stored layer (or the bottom layer
-when selection is absent), resets the view to upright Fit, and clears session
-history. The application's current brush preferences remain independent.
+Files also store optional `penSettings` metadata, described below. App preferences,
+viewport position/zoom/rotation, and undo/redo history are omitted. Opening selects
+the stored layer (or the bottom layer when selection is absent), restores pen
+settings, resets the view to upright Fit, and clears session history.
+
+## Per-pen settings (added in 1.1)
+
+The optional `penSettings` object has its own `version: 1`, `selectedPenId` (a
+stable BrushPreset ID), and `pens` object keyed by preset ID. Each pen stores
+`size` (document pixels), `shade` (opaque gray level), `pressure` and `tilt`
+(booleans), `nativePreviewScale` (0.25–1), and `nativePreviewTexture` (`fine` or
+`coarse`). All known presets are included, even ones hidden/unavailable in the
+current build. No native renderer resources or firmware crash-guard setting are
+stored. An unavailable selected pen uses Ink in the editor; its stored settings
+remain intact until the user selects another pen.
+
+Files without this object (including 1.0 files) inherit the current editor's pen
+settings. New canvases also inherit that set. Within a supported object, missing
+or invalid fields use that preset's built-in defaults; unknown pen IDs/fields are
+ignored, and unknown/missing selection means Ink. An unsupported object version
+or malformed object is treated as absent. Raster artwork remains readable.
+
+This is optional convenience metadata, so `requiredFeatures` stays unchanged.
+Old major-1 readers can open new files and ignore pen settings; re-saving in an
+older app can discard them. New readers continue to open original 1.0 files.
+The private restart checkpoint also stores this optional object in its existing
+v2 metadata; v1/v2 checkpoints and legacy PNGs remain readable. Settings are outside
+undo history and are serialized only during explicit saves/checkpoints.
 
 ## Compatibility rules for future writers
 
@@ -89,8 +113,8 @@ history. The application's current brush preferences remain independent.
   explicit migration reader rather than changing the interpretation of old files.
   Unsupported major versions produce a readable error and leave the editor intact.
 - Keep artwork files independent from diagnostic stroke schemas, native firmware,
-  app build markers, and preferences versions. Future optional tool presets belong
-  in a separately described field, with an explicit default when absent.
+  app build markers, and preferences versions. Optional tool presets use the
+  separately versioned `penSettings` object and defaults described above.
 
 ## Safety, ownership and restart
 
@@ -131,6 +155,7 @@ remains a separate operation for sharing images.
 ## Verification
 
 `DocumentFileChecks` exercises multilayer lossless pixel/metadata round-trips,
+per-pen settings/selection, 1.0 files without tools and unknown/invalid optional pens,
 Unicode names, full alpha range, hidden/locked/zero-opacity layers, defaulted older
 manifests, future additive minors, unsupported required features/major versions,
 malformed fields, missing/wrong-size/corrupt pixels, invalid paths, input limits,
@@ -140,7 +165,10 @@ history/view, restart checkpoint, and failed import/output preservation using an
 isolated editor and local URI streams. Run via `dev.ps1 test` or the focused
 `dev.ps1 test -DocumentsOnly`.
 
-Go103 validation (2026-10-25): the focused portable suite and the full recovered
+The pen-settings extension compiles with its device checks and passes build/lint;
+its device execution is pending a connected authorized tablet.
+
+Earlier Go103 validation (2026-10-25, before pen settings): the focused portable suite and the full recovered
 Lab suite pass. Standard and recovered app builds/lint pass. An actual Android
 Downloads picker save created `drawing-1792914218388.boox`; pulling the file to the
 host confirmed the manifest, original IDs, dimensions, layer PNG and ZIP checksums.

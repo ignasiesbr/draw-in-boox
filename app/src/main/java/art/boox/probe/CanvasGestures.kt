@@ -7,7 +7,7 @@ import kotlin.math.atan2
 import kotlin.math.ln
 
 /** Owns finger navigation only. Pen input and viewport math remain separate.
- * Translation is live; the first deliberate twist/pinch locks a deferred selection mode. */
+ * Translation and stepped zoom are live; twist previews a rotation applied on release. */
 class CanvasGestures(
     private val touchSlop: Float,
     private val minRotationSpan: Float,
@@ -15,7 +15,8 @@ class CanvasGestures(
     private val pan: (Float, Float) -> Unit,
     private val rotation: (Float) -> Unit,
     private val zoom: (Float, Float, Float) -> Unit,
-    private val end: (Boolean) -> Unit
+    private val end: (Boolean) -> Unit,
+    private val rotationEnabled: () -> Boolean = { false }
 ) {
     var active = false
         private set
@@ -58,7 +59,7 @@ class CanvasGestures(
         if (span <= 0f || startSpan <= 0f) { cancel(); return }
         if (span >= minRotationSpan) turn += DocumentViewport.normalizeAngle(angle - lastBearing)
         lastBearing = angle
-        val twist = span >= minRotationSpan && abs(turn) >= 5f
+        val twist = rotationEnabled() && span >= minRotationSpan && abs(turn) >= 5f
         val ratio = span / startSpan
         val pinchStrength = abs(ln(ratio)) / ln(1.15f)
         val pinch = startSpan >= minRotationSpan && pinchStrength >= 1f && abs(span - startSpan) > touchSlop

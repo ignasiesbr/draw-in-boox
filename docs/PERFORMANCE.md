@@ -1,6 +1,80 @@
 # Stroke responsiveness investigation
 
-Current UI marker: `floating toolbar v1` in Settings / `floating-toolbar-v1` in
+Current UI marker: `drawing mode v1` / `drawing-mode-v1` (2026-10-27).
+Fresh/private drawings without a saved viewport and New canvas start centered at
+100%; saved Fit/manual views still restore, and portable Open retains upright Fit.
+The toolbar's four-corners action hides toolbar and layers, leaving a 52dp Show
+controls button at top right. That button or Back restores the overlays without
+changing viewport, document, layer expansion or surface size. Visibility changes
+use the existing input-close/full-publish/deferred-reopen handshake; native input
+excludes only the restore button while hidden. Mode changes reject active drawing,
+navigation, pending commits and file work. State survives Activity recreation,
+without adding artwork metadata or preferences. Pen geometry, crash guard,
+immutable snapshots and the accepted 450ms stroke handoff remain unchanged.
+Startup/restore and actual overlay/mode/exclusion checks were updated. Both
+renderer builds/lint and test-APK compilation pass; device execution, physical
+overlay refresh and ordinary-fast/burst pen checks are pending.
+
+Previous UI marker: `compact layers v1` / `compact-layers-v1` (2026-10-27).
+The canvas now fills the workspace behind a content-height layers overlay. Short
+lists wrap; long lists scroll within the space above the bottom toolbar. Collapse
+leaves only a 52x60dp control. Native session exclusions capture the actual panel
+and toolbar rectangles in surface coordinates, so space below the panel remains
+available to ink. Panel collapse/expand and side changes explicitly close input
+and defer reconfiguration after layout even though surface size/origin stay fixed.
+Layer commands retain their existing close/layout/reopen path. No per-sample SDK
+setters, brush/policy changes or changes to the accepted 450ms handoff were added.
+Sizing/scrolling and panel layout/exclusion checks were updated. Both renderer
+builds/lint and test-APK compilation pass; device execution, physical pen and
+overlay refresh feedback remain pending tablet validation.
+
+Previous UI marker: `rotation controls v1` / `rotation-controls-v1` (2026-10-27).
+Two-finger twist is now opt-in via Settings > Canvas gestures, default false for
+fresh and existing installations without the new preference. With it off, twist
+does not activate navigation or compete with pinch/pan. The cached setting is
+loaded at startup and updated on Apply; gesture samples never read preferences.
+Two fixed buttons at the toolbar's right end rotate -15/+15 degrees through the
+existing close/publish/deferred-reopen path, guarded against drawing/navigation
+and pending commits/file operations. Pens can still scroll within the toolbar;
+the native exclusion uses its actual measured bounds. Brush widths, saved crash
+guard, immutable live-zoom snapshots and accepted 450ms pen handoff are retained.
+Settings/default/persistence/Apply/Cancel and gesture arbitration checks are
+updated. Both renderer builds/lint and test-APK compilation pass; device execution
+and physical control/zoom/pen feedback remain pending a connected tablet.
+
+Previous UI marker: `live zoom v1` in Settings / `live-zoom-v1` in launch logs.
+Pinch and toolbar zoom use 75% through 400% in 25 percentage-point steps; Fit
+can still show a smaller whole page. Pinch now changes the complete visible canvas
+during contact. Navigation coalesces on animation frames, with one immutable
+snapshot in flight and only the latest requested view retained. Each submitted
+view seeds the whole screen, including exposed paper/background edges; upright
+seeds keep visible-document cropping. Surface
+lock/transform/draw/post stay on the existing worker with memory/synchronous
+fallback. In-flight views can finish during movement to avoid starving display;
+release/cancel invalidate pending frames and synchronously publish the
+final/restored view before the existing deferred native reopen. Pen geometry,
+saved crash guard, stroke commits and 450ms quiet gap remain unchanged.
+New checks cover live viewport changes, 25-point controls, cancellation/anchoring,
+and attached-surface PixelCopy comparisons before lift at 0/37 degrees, including
+rapid changes and exposed edges. Both renderer builds/lint and test-APK compilation
+pass. Device execution and physical pinch/pen feedback are pending a connected
+tablet; no new responsiveness measurement is claimed.
+
+Previous UI marker: `pen settings v1` in Settings / `pen-settings-v1` in launch
+logs. Each pen retains independent settings in memory; explicit file/checkpoint
+operations serialize the drawing's complete set and selection. Loading compiles
+the selected brush before input reopens. No preference lookup, JSON or file work
+is added to stroke callbacks. Native policy, the saved guard, pressure/tilt geometry,
+immutable worker snapshots and 450ms handoff remain unchanged. Physical pen
+matching/responsiveness limits remain as documented below.
+
+Previous UI marker: `image import v1` in Settings / `image-import-v1` in launch
+logs. JPG/PNG decode runs on the explicit file worker with canvas-bounded pixels;
+layer/history insertion and one checkpoint occur while input is closed for import.
+No decode, image file access or serialization is added to pen-up. The saved
+crash guard, brush geometry and accepted handoff remain. See IMAGE_IMPORT.md.
+
+Previous UI marker: `floating toolbar v1` in Settings / `floating-toolbar-v1` in
 launch logs. The canvas fills the former top-control area, with an opaque floating
 bottom toolbar. Native input excludes that one surface-local rectangle at session
 open; the paper's rectangular clip remains. No contact-time region setters are

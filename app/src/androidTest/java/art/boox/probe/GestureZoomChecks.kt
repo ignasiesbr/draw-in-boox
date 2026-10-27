@@ -10,7 +10,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 object GestureZoomChecks {
-    private fun send(view: RasterSurface, action: Int, ratio: Float = 1f, degrees: Float = 0f,
+    internal fun send(view: RasterSurface, action: Int, ratio: Float = 1f, degrees: Float = 0f,
         x: Float = 180f, y: Float = 160f, reversed: Boolean = false, third: Boolean = false) {
         val radius = 100f * ratio
         val radians = Math.toRadians(degrees.toDouble())
@@ -37,6 +37,7 @@ object GestureZoomChecks {
         }
         val strokes = mutableListOf<PenStroke>()
         val view = RasterSurface(testContext, CanvasSpec(512, 512)) { strokes += it }
+        view.configureRotationGesture(true)
         view.surfaceChanged(view.holder, 0, 400, 400)
         view.createDocument(CanvasSpec(512, 512))
         view.zoom(ZoomAction.ACTUAL)
@@ -57,9 +58,10 @@ object GestureZoomChecks {
             send(view, MotionEvent.ACTION_UP, ratio, degrees)
         }
 
-        check(ZoomLevels.all.map { it.number } == (1..7).toList())
-        check(ZoomLevels.all.map { it.percent } == listOf(10, 25, 50, 100, 150, 250, 400))
+        check(ZoomLevels.all.map { it.number } == (1..14).toList())
+        check(ZoomLevels.all.map { it.percent } == (75..400 step 25).toList())
         for (level in ZoomLevels.all) check(ZoomLevels.nearest(level.scale) == level)
+        check(ZoomLevels.nearest(1.13f).scale == 1.25f)
         val original = view.viewport.transform
         val anchor = original.toDocument(180f, 160f)
         view.rawInput = true
@@ -68,10 +70,10 @@ object GestureZoomChecks {
         check(began == 0 && view.zoomPreviewLevel == null) { "Small span jitter began zoom" }
         send(view, MotionEvent.ACTION_MOVE, 1.6f, reversed = true)
         check(began == 1 && view.isNavigating && !view.rawInput)
-        check(view.zoomPreviewLevel?.number == 5 && view.viewport.transform == original)
+        check(view.zoomPreviewLevel?.percent == 150 && view.viewport.transform.scale == 1.5f)
         send(view, MotionEvent.ACTION_MOVE, 2.5f, 30f)
-        check(view.zoomPreviewLevel?.number == 6 && view.rotationPreviewAngle == null)
-        check(view.viewport.transform == original) { "Pinch altered the canvas before release" }
+        check(view.zoomPreviewLevel?.percent == 250 && view.rotationPreviewAngle == null)
+        check(view.viewport.transform.scale == 2.5f) { "Pinch did not update the canvas before release" }
         release(4f, 30f)
         check(ended == 1 && !view.isNavigating && view.zoomPreviewLevel == null)
         check(view.viewport.transform.scale == 4f && view.viewport.rotationDegrees == 37.25f)
@@ -80,16 +82,16 @@ object GestureZoomChecks {
             "Rotated zoom lost its pinch anchor"
         }
 
-        // Normal pinch limits are levels 1 and 7; there is no zero/reset snap.
+        // Pinch clamps at 75% and 400%; there is no zero/reset snap.
         view.zoom(ZoomAction.ACTUAL)
         start()
         send(view, MotionEvent.ACTION_MOVE, 0.05f)
         check(view.zoomPreviewLevel?.number == 1)
         release(0.05f)
-        check(view.viewport.transform.scale == 0.1f)
+        check(view.viewport.transform.scale == 0.75f)
         start()
         send(view, MotionEvent.ACTION_MOVE, 100f)
-        check(view.zoomPreviewLevel?.number == 7)
+        check(view.zoomPreviewLevel?.percent == 400)
         release(100f)
         check(view.viewport.transform.scale == 4f)
 
@@ -105,7 +107,9 @@ object GestureZoomChecks {
                 else -> send(view, MotionEvent.ACTION_POINTER_DOWN or (2 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), 0.5f, third = true)
             }
             release(0.5f)
-            check(view.viewport.transform == before && view.zoomPreviewLevel == null && !view.isNavigating)
+            val after = view.viewport.transform
+            check(after.scale == before.scale && abs(after.x - before.x) < 0.002f &&
+                abs(after.y - before.y) < 0.002f && view.zoomPreviewLevel == null && !view.isNavigating)
         }
 
         // Rotation owns the stream once selected, even if finger spacing then changes.
@@ -117,13 +121,14 @@ object GestureZoomChecks {
         check(view.zoomPreviewLevel == null && view.rotationPreviewAngle == selectedAngle)
         send(view, MotionEvent.ACTION_CANCEL, 2f, 30f)
 
-        // Pan can transition to zoom, but the paper freezes once zoom is selected.
+        // Pan can transition to live zoom; cancellation retains that earlier pan.
         start()
         send(view, MotionEvent.ACTION_MOVE, x = 220f)
         val panned = view.viewport.transform
         send(view, MotionEvent.ACTION_MOVE, 1.6f, x = 240f)
-        check(view.zoomPreviewLevel != null && view.viewport.transform == panned)
+        check(view.zoomPreviewLevel?.percent == 150 && view.viewport.transform.scale == 1.5f)
         send(view, MotionEvent.ACTION_CANCEL, 1.6f)
+        check(abs(view.viewport.transform.x - panned.x) < 0.002f && abs(view.viewport.transform.y - panned.y) < 0.002f)
 
         view.beginRawStroke()
         start()

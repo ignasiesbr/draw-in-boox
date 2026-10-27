@@ -19,6 +19,7 @@ class RasterInstrumentation : Instrumentation() {
     private var settingsOnly = false
     private var documentsOnly = false
     private var notesOnly = false
+    private var imagesOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
@@ -28,11 +29,21 @@ class RasterInstrumentation : Instrumentation() {
         settingsOnly = arguments?.getString("settingsOnly") == "true"
         documentsOnly = arguments?.getString("documentsOnly") == "true"
         notesOnly = arguments?.getString("notesOnly") == "true"
+        imagesOnly = arguments?.getString("imagesOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (imagesOnly) {
+                var failure: Throwable? = null
+                runOnMainSync { try { ImageImportChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
+                failure?.let { throw it }
+                ImageImportChecks.actions(this)
+                result.putString("stream", "PASS: image import checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (notesOnly) {
                 var failure: Throwable? = null
                 runOnMainSync { try { BooxNotesChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
@@ -134,6 +145,7 @@ class RasterInstrumentation : Instrumentation() {
                     checkCheckpoint(testContext, view, file)
                     DocumentChecks.run(targetContext)
                     DocumentFileChecks.run(targetContext)
+                    ImageImportChecks.run(targetContext)
                     CanvasGestureChecks.run(targetContext)
                     GestureRotationChecks.run(targetContext)
                     GestureZoomChecks.run(targetContext)
@@ -162,6 +174,7 @@ class RasterInstrumentation : Instrumentation() {
             failure?.let { throw it }
             CanvasDialogChecks.run(this)
             DocumentFileChecks.actions(this)
+            ImageImportChecks.actions(this)
             LayerPanelChecks.run(this)
             SettingsChecks.run(this)
             BrushChecks.dialogs(this)

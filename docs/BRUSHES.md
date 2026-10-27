@@ -1,5 +1,14 @@
 # Brush input, tilt and live preview
 
+Per-pen settings (`pen-settings-v1`, 2026-10-25): each preset independently retains
+size, shade, pressure/tilt and preview fitting/texture. The drawing owns the complete
+set and selected pen; portable 1.1 files and restart checkpoints restore it. Files
+without pen metadata and new canvases inherit the current settings. Preferences
+schema 4 reads schemas 1–3 and freezes the old shared shade for every pen before
+the first independent shade edit. Changing one pen never updates another. See
+[SAVE_FORMAT.md](SAVE_FORMAT.md) for defaults and old-reader compatibility.
+The shared width calculation, native policy and 450ms handoff remain unchanged.
+
 Current Lab extension: Brush, Pencil and Charcoal join Fountain; see
 [BRUSH_ENGINE.md](BRUSH_ENGINE.md) for presets, source-only contracts, tilt shading,
 tests and native preview approximation limits. Existing four tools keep their
@@ -44,7 +53,7 @@ older native-color request guidance below must not be reintroduced without evide
 The toolbar now contains Ink, Tilt, Marker and Eraser. Tap another tool to select it;
 tap the selected icon again to open its settings with Apply/Cancel. Size, pressure,
 tilt and gray shade are grouped in that dialog; separate right-hand size, settings
-and shade icons have been removed. Shade remains shared across drawing tools.
+and shade icons have been removed. Shade is now remembered independently per pen.
 
 Eraser has a fixed round tip, 1–128 document pixels, default 32px, with a separately
 remembered size (`eraser` ID). Its settings show size only. It clears selected-layer
@@ -76,9 +85,9 @@ Monoline is now labeled **Marker**, with a broader nib icon. Its stored `monolin
 
 Constant-width Marker uses engine `round-marker` v1: one round-capped/round-joined stroked Path per stroke, or a filled circle for a dot/all-coincident samples. This avoids repeated overlapping circle/segment rasterization at large widths. Enabling pressure or tilt uses the existing `continuous-round` engine instead. Existing artwork is raster, so changing this engine does not reinterpret saved pixels. Tests cover broad clipped strokes across multiple history tiles, dots after paths, captured size/shade, opaque overlaps, PNG, undo/redo and a 4× preview width of 512 sent screen pixels. This tests app width calculation, not firmware width limits.
 
-`InkShade` provides opaque RGB gray levels 238, 204, 170, 136, 102, 68, 34 and 0. The toolbar swatch opens `InkShadeDialog`; the same `InkShadePicker` appears in Brush settings. Both edit a draft and Apply/Cancel. Shade is shared across tools; size/dynamics remain per-preset. Grays are RGB ink values, not reduced alpha: overlapping interiors keep the selected shade and light ink can cover dark pixels. White/paper and erasing remain separate. The static stroke sample scales large nibs to fit and labels its displayed percentage.
+`InkShade` provides opaque RGB gray levels 238, 204, 170, 136, 102, 68, 34 and 0. The toolbar swatch opens `InkShadeDialog`; the same `InkShadePicker` appears in Brush settings. Both edit a draft and Apply/Cancel. Shade, size and dynamics are remembered per-preset. Grays are RGB ink values, not reduced alpha: overlapping interiors keep the selected shade and light ink can cover dark pixels. White/paper and erasing remain separate. The static stroke sample scales large nibs to fit and labels its displayed percentage.
 
-Preference schema 2 reads versions 1–2, keeps existing keys/IDs and adds global `ink_gray_level`. Missing/unknown shades fall back to black; invalid widths fall back to that preset's default. Schema-7 diagnostic strokes retain the old point layout and record captured `inkColorArgb`, `grayLevel`, settings version 2 and the actual engine ID/version. Old records with no color mean black. Raster checkpoint and PNG formats need no migration.
+Historical preference schema 2 reads versions 1–2, keeps existing keys/IDs and adds global `ink_gray_level`. Missing/unknown shades fall back to black; invalid widths fall back to that preset's default. Schema-7 diagnostic strokes retain the old point layout and record captured `inkColorArgb`, `grayLevel`, settings version 2 and the actual engine ID/version. Old records with no color mean black. Raster checkpoint and PNG formats need no migration.
 
 Bitmap rendering and `TouchHelper.setStrokeColor` receive the same opaque ARGB from the captured brush. Color is set at session setup/renderer resume, not per input sample. Full app-computed width still drives native PENCIL; the accepted worker, 450ms gap, cancellation and bitmap/history ownership are unchanged. Logs include `requestedColorArgb` and sent width ranges. These are requests, not measured native output. [Onyx's older Scribble API documentation](https://github.com/onyx-intl/OnyxAndroidDemo/blob/master/doc/Scribble-API.md) describes black/white-only native color; the pinned Pen SDK forwards general color integers but cannot establish grayscale support on this particular firmware. Physically compare very light/middle/near-black strokes and wide sizes before and after lifting, including zoom. Native shade/width fidelity remains unverified until that test.
 

@@ -11,6 +11,7 @@ import java.io.File
 
 /** Explicit file operations freeze the editor instead of copying every layer into another snapshot.
  * No serialization is scheduled by stroke commits. Only this worker reads the frozen artwork.
+ * Image decode returns independent pixels; layer/history changes remain on UI.
  */
 @Suppress("DEPRECATION")
 class DocumentActions(
@@ -45,8 +46,13 @@ class DocumentActions(
     fun menu(export: () -> Unit) {
         if (!available()) return
         AlertDialog.Builder(activity).setTitle("Drawing files")
-            .setItems(arrayOf("Save a copy…", "Open drawing…", "Export PNG")) { _, index ->
-                when (index) { 0 -> save(); 1 -> confirmReplace("Open another drawing") { chooseOpen() }; 2 -> export() }
+            .setItems(arrayOf("Save a copy…", "Open drawing…", "Import image…", "Export PNG")) { _, index ->
+                when (index) {
+                    0 -> save()
+                    1 -> confirmReplace("Open another drawing") { chooseOpen() }
+                    2 -> chooseImage()
+                    3 -> export()
+                }
             }.show()
     }
 
@@ -78,13 +84,28 @@ class DocumentActions(
         }, OPEN)
     }
 
+    private fun chooseImage() {
+        if (!available()) return
+        val current = surface.document
+        if (current == null) { message("Create a canvas before importing an image."); return }
+        if (current.layers.size >= current.maxLayers) {
+            message("Layer memory limit reached (${current.maxLayers} for this canvas).")
+            return
+        }
+        launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/jpeg", "image/png"))
+        }, IMPORT_IMAGE)
+    }
+
     private fun launch(intent: Intent, request: Int) {
         try { closeInput(); activity.startActivityForResult(intent, request) }
         catch (failure: Exception) { afterSave = null; message("Cannot open file picker: ${failure.message}"); resumeInput() }
     }
 
     fun onResult(request: Int, result: Int, data: Intent?): Boolean {
-        if (request != SAVE && request != OPEN) return false
+        if (request != SAVE && request != OPEN && request != IMPORT_IMAGE) return false
         val uri = data?.data
         if (result != Activity.RESULT_OK || uri == null) { pendingResult = null; afterSave = null; resumeInput(); return true }
         if (!surface.initializationComplete) {
@@ -94,9 +115,15 @@ class DocumentActions(
         }
         if (!available()) { afterSave = null; return true }
         val current = surface.document
-        if (request == SAVE && current == null) {
+        if ((request == SAVE || request == IMPORT_IMAGE) && current == null) {
             afterSave = null
-            message("Cannot save until a drawing is available. Open a drawing or create a canvas first.")
+            message("Open a drawing or create a canvas before ${if (request == SAVE) "saving" else "importing an image"}.")
+            resumeInput()
+            return true
+        }
+        if (request == IMPORT_IMAGE && checkNotNull(current).layers.size >= current.maxLayers) {
+            message("Layer memory limit reached (${current.maxLayers} for this canvas).")
+            resumeInput()
             return true
         }
         val continuation = afterSave
@@ -105,32 +132,37 @@ class DocumentActions(
         surface.inputEnabled = false
         busy = true
         progress = AlertDialog.Builder(activity)
-            .setTitle(if (request == SAVE) "Saving drawing…" else "Opening drawing…")
+            .setTitle(when (request) { SAVE -> "Saving drawing…"; IMPORT_IMAGE -> "Importing image…"; else -> "Opening drawing…" })
             .setMessage("Please wait…").setCancelable(false).show()
         Thread({
             var replacement: DrawingDocument? = null
+            var image: ImageImport.Prepared? = null
             var failure: Throwable? = null
             var temporary: File? = null
             try {
-                val staged = File.createTempFile("drawing-", ".boox", activity.cacheDir).also { temporary = it }
-                if (request == SAVE) {
-                    DocumentFile.write(staged, checkNotNull(current))
-                    try {
-                        checkNotNull(activity.contentResolver.openOutputStream(uri, "w")) { "Cannot write this location" }.use { output ->
-                            staged.inputStream().use { it.copyTo(output) }
-                        }
-                    } catch (error: Throwable) {
-                        // ACTION_CREATE_DOCUMENT created a new file; remove only that incomplete copy.
-                        try { DocumentsContract.deleteDocument(activity.contentResolver, uri) } catch (_: Exception) { }
-                        throw error
-                    }
+                if (request == IMPORT_IMAGE) {
+                    image = ImageImport.read(activity, uri, checkNotNull(current).spec)
                 } else {
-                    checkNotNull(activity.contentResolver.openInputStream(uri)) { "Cannot read this file" }.use { input ->
-                        staged.outputStream().use { input.copyLimited(it, DocumentFile.MAX_FILE_BYTES) }
+                    val staged = File.createTempFile("drawing-", ".boox", activity.cacheDir).also { temporary = it }
+                    if (request == SAVE) {
+                        DocumentFile.write(staged, checkNotNull(current))
+                        try {
+                            checkNotNull(activity.contentResolver.openOutputStream(uri, "w")) { "Cannot write this location" }.use { output ->
+                                staged.inputStream().use { it.copyTo(output) }
+                            }
+                        } catch (error: Throwable) {
+                            // ACTION_CREATE_DOCUMENT created a new file; remove only that incomplete copy.
+                            try { DocumentsContract.deleteDocument(activity.contentResolver, uri) } catch (_: Exception) { }
+                            throw error
+                        }
+                    } else {
+                        checkNotNull(activity.contentResolver.openInputStream(uri)) { "Cannot read this file" }.use { input ->
+                            staged.outputStream().use { input.copyLimited(it, DocumentFile.MAX_FILE_BYTES) }
+                        }
+                        replacement = DocumentFile.read(staged)
+                        // Atomic checkpoint succeeds before ownership changes. Failed imports retain the old document.
+                        surface.checkpointReplacement(checkNotNull(replacement))
                     }
-                    replacement = DocumentFile.read(staged)
-                    // Atomic checkpoint succeeds before ownership changes. Failed imports retain the old document.
-                    surface.checkpointReplacement(checkNotNull(replacement))
                 }
             } catch (error: Exception) { failure = error }
             catch (error: OutOfMemoryError) { failure = error }
@@ -138,6 +170,7 @@ class DocumentActions(
             activity.runOnUiThread {
                 busy = false
                 if (destroyed) {
+                    image?.bitmap?.recycle()
                     replacement?.recycle()
                     surface.dispose()
                 } else {
@@ -145,8 +178,24 @@ class DocumentActions(
                     if (failure != null) {
                         replacement?.recycle()
                         Log.e("BooxProbe", "Drawing file operation failed", failure)
-                        message(if (failure is OutOfMemoryError) "Not enough memory to open this drawing. Current artwork retained."
-                            else "${if (request == SAVE) "Save" else "Open"} failed: ${failure?.message}. Current artwork retained.")
+                        message(if (failure is OutOfMemoryError) "Not enough memory for this file operation. Current artwork retained."
+                            else "${when (request) { SAVE -> "Save"; IMPORT_IMAGE -> "Image import"; else -> "Open" }} failed: ${failure?.message}. Current artwork retained.")
+                    } else if (request == IMPORT_IMAGE) {
+                        try {
+                            check(surface.document === current) { "The canvas changed while importing." }
+                            val prepared = checkNotNull(image)
+                            check(surface.applyLayerCommand(LayerCommand.ImportImage(prepared.bitmap, prepared.name))) {
+                                "Finish drawing or navigation before importing an image."
+                            }
+                            // Explicit import only; never schedule file writes from pen-up.
+                            if (surface.checkpoint()) message("Image imported. Long-press its layer thumbnail to change opacity.")
+                        } catch (error: Exception) {
+                            Log.e("BooxProbe", "Image layer import failed", error)
+                            message("Image import failed: ${error.message}")
+                        } catch (error: OutOfMemoryError) {
+                            Log.e("BooxProbe", "Image layer import ran out of memory", error)
+                            message("Not enough memory to import this image.")
+                        } finally { image?.bitmap?.recycle() }
                     } else if (request == OPEN) {
                         surface.installDocument(checkNotNull(replacement))
                         message("Drawing opened")
@@ -171,5 +220,5 @@ class DocumentActions(
 
     private fun message(text: String) = Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
 
-    private companion object { const val SAVE = 101; const val OPEN = 102 }
+    private companion object { const val SAVE = 101; const val OPEN = 102; const val IMPORT_IMAGE = 103 }
 }

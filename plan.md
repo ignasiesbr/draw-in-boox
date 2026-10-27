@@ -72,6 +72,10 @@ Additional validation: create every preset, swap orientation, reject invalid or 
 
 ## 2. Basic zoom using toolbar actions
 
+Fresh/private drawings without a saved view and New canvas start at centered
+100%; saved views still restore. Drawing mode hides toolbar and layers without
+changing zoom/pan; a small top-right Show controls button or Back restores them.
+
 **Purpose:** make zoom useful and validate BOOX compatibility before adding gesture complexity.
 
 Initial actions: zoom in, zoom out, fit document, and 100%. These are functional requirements; their final presentation is deferred. Define 100% as one document pixel per drawing-view pixel.
@@ -98,11 +102,15 @@ Validation:
 
 ## 3. Finger navigation: pinch and pan
 
-Deferred pinch zoom now uses levels 1–7: 10%, 25%, 50%, 100%, 150%, 250%, 400%. Select on an upright level/percentage badge while the canvas stays still, apply once on release around the selection midpoint. The first deliberate pinch/twist owns the remainder of the gesture; cancellation discards pending selection. Automated checks pass; physical pinch feel, mode thresholds and e-ink ghosting remain to validate.
+Rotation gesture now defaults off, with a saved Settings > Canvas gestures choice
+to enable it. Two icons at the right end of the toolbar rotate left/right by 15
+degrees without requiring a twist. Disabled twist cannot claim pinch/pan input.
+
+Live pinch zoom (`live-zoom-v1`) repaints the whole visible canvas in 25 percentage-point steps from 75% through 400%. Button zoom shares those steps; Fit remains independent. The upright badge shows the percentage. Immutable worker snapshots and latest-view coalescing bound pending redraws; release publishes the final view, cancellation restores the view at pinch selection. Rotation still applies on release. Validation is recorded in PERFORMANCE.md and HANDOFF.md; physical pinch feel and e-ink ghosting remain to validate.
 
 Twist selection includes upright snapping: catch within +/-4 degrees of 0, release beyond +/-7 degrees, with the badge showing the exact committed angle. Other snap angles and preferences remain future UX choices.
 
-**Panning implemented, physical validation pending:** two-finger midpoint translation with movement threshold, stable pointer IDs, cancellation/focus handling, pen priority, and BOOX suspension/reconfiguration once per navigation session. Single fingers do not pan or paint. Panning works at any zoom and angle, including fitted paper; Fit recenters. No new dependency. Deferred two-finger twist rotation now shares the CanvasGestures lifecycle: select the angle on a small rotating badge, apply once on release, discard on cancellation. The user confirmed selection works; the badge now rotates as an orientation preview. Deferred pinch zoom is implemented with seven absolute levels from 10% to 400%; physical validation is pending.
+**Panning implemented, physical validation pending:** two-finger midpoint translation with movement threshold, stable pointer IDs, cancellation/focus handling, pen priority, and BOOX suspension/reconfiguration once per navigation session. Single fingers do not pan or paint. Panning works at any zoom and angle, including fitted paper; Fit recenters. No new dependency. Deferred two-finger twist rotation now shares the CanvasGestures lifecycle: select the angle on a small rotating badge, apply once on release, discard on cancellation. The user confirmed selection works; the badge now rotates as an orientation preview. Live pinch zoom is implemented in 25-point steps from 75% to 400%; physical validation is pending.
 
 **Purpose:** add natural navigation on top of the already-tested viewport.
 
@@ -151,6 +159,10 @@ Validation:
 - Saved brush settings survive restart; old strokes and exported artwork do not change when settings change.
 
 ## 5. Layers, undo/redo, and editable persistence
+
+The layers panel now wraps its content height over a full-workspace canvas. Long
+lists scroll above the toolbar; collapsed state uses only a small expand control.
+Native input excludes actual overlay rectangles, leaving canvas below the panel.
 
 **Layers implemented:** collapsible panel (right by default, configurable) with stable-ID selection, add/delete, lock/visibility, duplicate, merge down and up/down reordering. Memory-based layer cap, cached dirty-region composition, layer-targeted raster history and undoable structural commands are in place. Internal checkpoint version 2 preserves layers and reads prior checkpoints; portable save/open is implemented; see [the format contract](docs/SAVE_FORMAT.md). Automated layer/history/input/export/migration and real panel layout tests pass. Physical pen/layer UX checks remain. See [docs/LAYERS.md](docs/LAYERS.md).
 

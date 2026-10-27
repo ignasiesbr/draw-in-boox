@@ -122,7 +122,8 @@ object HistoryTapChecks {
         var zooms = 0
         val navigation = CanvasGestures(20f, 90f,
             begin = { combined.cancel(); true },
-            pan = { _, _ -> pans++ }, rotation = { rotations++ }, zoom = { _, _, _ -> zooms++ }, end = {})
+            pan = { _, _ -> pans++ }, rotation = { rotations++ }, zoom = { _, _, _ -> zooms++ },
+            end = {}, rotationEnabled = { true })
         combined = HistoryTapGestures(20f, 300L, { !navigation.active },
             post = { task, delay -> tasks[task] = now + delay }, remove = { tasks.remove(it) },
             undo = { actions += "undo" }, redo = { actions += "redo" },

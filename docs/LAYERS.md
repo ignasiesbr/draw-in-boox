@@ -4,7 +4,7 @@ Implemented and physically accepted by the user on 2026-10-23, including opacity
 
 ## Controls and behavior
 
-The collapsible panel defaults to the right; the gear opens app Settings to choose left/right. Panel side and expansion are preferences, independent of artwork/history. Moving or resizing the panel preserves the canvas surface and reconfigures BOOX input after layout, including changes of screen origin without size changes.
+The collapsible panel defaults to the right; the gear opens app Settings to choose left/right. Panel side and expansion are preferences, independent of artwork/history. The panel now overlays a full-workspace canvas and wraps its content height; long lists scroll above the bottom toolbar. Collapse leaves only a 52x60dp expand control. Space beneath either panel state stays canvas. Moving/resizing the overlay preserves surface dimensions, origin and viewport, and explicitly reconfigures BOOX input after layout. Native input excludes only its measured rectangle and the toolbar rectangle, captured at session open.
 
 Rows list topmost first. Tap a name/thumbnail to select; a solid black border marks the selection. Shared monochrome icon controls provide Add/Duplicate/Merge down/Delete at the top and Visibility/Lock/Up/Down on each row. Checked toggles have black borders; controls have at least 48dp touch targets, labels and tooltips. Hide leaves an expand icon.
 
@@ -30,6 +30,6 @@ BOOX live ink is a fast temporary foreground preview. It may appear above higher
 
 ## Verification
 
-Build/lint and the full device instrumentation suite passed. `LayerChecks` covers composition/order/cache, protection, duplicates, merges, history, migration and memory limits. `LayerRenameChecks`, `LayerOpacityChecks` and `AlphaLockChecks` cover their metadata and pixel semantics, persistence and undo/redo. `LayerPanelChecks` exercises real dialogs against isolated artwork plus panel collapse/expand and side changes. `SettingsChecks` covers app-preference defaults/fallback/persistence and modal Apply/Cancel. Keep test storage isolated from the actual document.
+Build/lint and the full device instrumentation suite passed for the earlier column layout. The content-height overlay update adds sizing/scrolling and actual layout/exclusion checks; device execution and physical pen checks are pending. `LayerChecks` covers composition/order/cache, protection, duplicates, merges, history, migration and memory limits. `LayerRenameChecks`, `LayerOpacityChecks` and `AlphaLockChecks` cover their metadata and pixel semantics, persistence and undo/redo. `LayerPanelChecks` exercises real dialogs against isolated artwork plus panel collapse/expand and side changes. `SettingsChecks` covers app-preference defaults/fallback/persistence and modal Apply/Cancel. Keep test storage isolated from the actual document.
 
 The user confirmed the layer engine, compact icon UI/settings, opacity and alpha lock work well. Screenshots: panel (screenshot omitted), opacity modal (screenshot omitted), alpha-lock modal (screenshot omitted). Physical ghosting/edge/preview equivalence still require ongoing tablet checks; screenshots and automated pixels do not measure them.

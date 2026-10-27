@@ -7,7 +7,8 @@ param(
     [switch]$FountainOnly,
     [switch]$BrushesOnly,
     [switch]$DocumentsOnly,
-    [switch]$NotesOnly
+    [switch]$NotesOnly,
+    [switch]$ImagesOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -72,6 +73,7 @@ switch ($Command) {
         $instrumentArgs = @('-w')
         if ($DocumentsOnly) { $instrumentArgs += @('-e', 'documentsOnly', 'true') }
         if ($NotesOnly) { $instrumentArgs += @('-e', 'notesOnly', 'true') }
+        if ($ImagesOnly) { $instrumentArgs += @('-e', 'imagesOnly', 'true') }
         if ($BrushesOnly) {
             if (!($Lab -or $Renderer -eq 'recovered')) { throw '-BrushesOnly requires -Lab or -Renderer recovered.' }
             $instrumentArgs += @('-e', 'brushesOnly', 'true')
@@ -82,7 +84,7 @@ switch ($Command) {
         }
         $output = Invoke-Adb shell am instrument @instrumentArgs "$applicationPackage.test/art.boox.probe.RasterInstrumentation"
         $output
-        $expected = if ($NotesOnly) { 'PASS: BOOX notes pen checks' } elseif ($DocumentsOnly) { 'PASS: portable document checks' } elseif ($BrushesOnly) { 'PASS: brush engine checks' } elseif ($FountainOnly) { 'PASS: fountain renderer checks' } else { 'PASS: bitmap' }
+        $expected = if ($ImagesOnly) { 'PASS: image import checks' } elseif ($NotesOnly) { 'PASS: BOOX notes pen checks' } elseif ($DocumentsOnly) { 'PASS: portable document checks' } elseif ($BrushesOnly) { 'PASS: brush engine checks' } elseif ($FountainOnly) { 'PASS: fountain renderer checks' } else { 'PASS: bitmap' }
         if (($output -join "`n") -notmatch $expected) { throw 'Device checks failed' }
     }
     'capture' {
