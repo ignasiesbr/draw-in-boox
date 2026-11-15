@@ -1,118 +1,156 @@
 # Draw in Boox
 
-The launcher icon is white with a small black pencil and scribble. All builds
-are labeled **Draw in Boox**. Existing installations and `.boox` drawings
-remain compatible; new PNG exports go to `Pictures/Draw in Boox`.
+A drawing app for BOOX e-ink tablets, built around pen input, layers and editable
+drawings. Developed and tested on the **BOOX Go 10.3 running Android 12**, with
+BOOX native live ink where supported.
 
-The **floating toolbar** groups Marker, Calligraphy, Fountain, Ink, Brush, Ballpoint,
-and Pencil in fine/coarse textures (Fountain/Brush require the Lab build), followed
-by Eraser, Undo, Redo, Drawing mode and Settings. A separate small vertical
-**navigation toolbar** on the left contains Fit screen, Zoom in, Zoom out and
-rotate-left/right. Zoom changes in 25 percentage-point steps; rotation changes by
-15 degrees per tap. Fit centers the whole canvas. Studio pens and the old top rows are hidden.
+**[Download an APK](https://github.com/ignasiesbr/draw-in-boox/releases)** ·
+**[Local development](docs/DEVELOPMENT.md)** ·
+**[Report an issue](https://github.com/ignasiesbr/draw-in-boox/issues)**
 
-The vertical toolbar has a small dotted grip at the top; the horizontal toolbar
-has one on the left. Either grip moves its toolbar freely in all directions. Hold it with a
-finger or pen, or hover the pen over it, for about half a second, then drag.
-Release or lift the hovering pen to drop it. Positions are remembered and kept
-inside the workspace when its size changes.
-Tap the selected pen again to edit it. The new pens use original SDK
-geometry with firmware-matched settings; physical matching is still under test.
-See [BOOX pens implementation and validation](docs/BOOX_NOTES_PENS.md).
+This is an experimental app. The current release is an ARM64, debug-signed preview;
+other BOOX models and firmware versions have not been verified. Android 10 or newer
+is required, but Android version alone does not guarantee BOOX pen compatibility.
 
-Open **Settings** for Files, New canvas, Clear, Refresh, View controls and input
-mode. Clear still asks before clearing the selected layer. View controls contains
-additional zoom and angle actions. **Canvas gestures default off**, including
-pan, pinch, twist and history taps. Enable **Settings > Gestures > Enable canvas
-gestures** to use them. Undo/Redo shortcuts can be selected individually; twist
-also requires **Rotate: two-finger twist**.
-Once panning starts, spreading or twisting the fingers keeps panning. Lift your
-fingers and start a fresh pinch to zoom.
+## Install
 
-The layers panel takes only the height its controls and layer list need. The
-canvas continues underneath it; long lists scroll and hiding leaves a small
-expand button. The panel can still sit on either side.
+1. Open [Releases](https://github.com/ignasiesbr/draw-in-boox/releases) and choose
+   the newest preview. Download the `.apk` from **Assets**.
+2. Open the APK on your BOOX tablet and allow installation from that source if
+   Android asks. Complete the installation.
+3. Launch **Draw in Boox**, shown with a black pencil on a white icon.
 
-Fresh drawings and New canvas start at **100% zoom**; existing saved views restore.
-Tap the **four-corners icon** between Redo and Settings for Drawing mode, hiding
-both toolbars and layers. Use the small **Show controls** button at top right, or
-Back, to bring them back. Zoom and pan stay where you left them.
+The published preview uses the recovered renderer and package ID
+`art.boox.probe.lab`. Updates with the same package and signing key retain app data.
+Save important work as `.boox` files before changing installations.
 
-Undo remains immediate; admitted strokes now compress copied history tiles in a
-bounded background worker. Large edits and memory/backlog pressure retain the
-synchronous fallback. See [undo compression](docs/UNDO_COMPRESSION.md) for limits
-and validation; physical responsiveness testing is pending.
+## Features
 
-New documents default to **BOOX screen · landscape**, 2480 × 1860 pixels.
-Use **Swap portrait / landscape** in New canvas for portrait. Existing drawings
-keep their saved dimensions.
+| Feature | What you can do |
+| --- | --- |
+| Pens and eraser | Draw with Marker, Calligraphy, Ink, Ballpoint and fine/coarse Pencil. The preview build also includes Fountain and Brush. Erase pixels on the selected layer. |
+| Per-pen settings | Adjust size, eight gray shades and supported pressure/tilt options. Each pen remembers its settings. Tap the selected pen again to edit it. |
+| Layers | Add, rename, duplicate, reorder, merge down or delete layers; toggle visibility and locking; adjust opacity and alpha lock. The layer limit depends on canvas size and available memory. |
+| Undo and redo | Undo strokes, erasing, image import and layer edits. History holds up to 10 actions within a memory budget and is available during the current session. |
+| Canvas sizes | Start with BOOX screen, square, A5, A4, landscape or custom pixel dimensions. The default is 2480 × 1860, in landscape. |
+| View controls | Fit the page, zoom in 25 percentage-point steps from 75% to 400%, and rotate in 15° steps or enter an exact angle. Fit can show larger pages below 75%. |
+| Movable controls | Move the drawing and navigation toolbars independently. Collapse the layers panel or place it on either side. Toolbar positions are remembered. |
+| Drawing mode | Hide both toolbars and the layers panel for more drawing space, then restore them without changing the view. |
+| Image import | Import JPG or PNG as a new layer, centered and fitted to the canvas. PNG transparency is preserved. |
+| Editable files | Save and open portable `.boox` drawings containing layer pixels, layer properties and pen settings. |
+| PNG export | Export the complete drawing, flattened over white, to `Pictures/Draw in Boox`. |
+| Optional gestures | Enable two-finger pan, pinch zoom, twist rotation and Undo/Redo shortcuts. Canvas gestures default off. |
 
-Use **Settings → Files → Import image…** to add a JPG or PNG as a new layer,
-centered and fitted inside the canvas. Long-press that layer's thumbnail to change
-its opacity. Import preserves PNG transparency and supports Undo/Redo; imported
-pixels are included in saved drawings and PNG exports. See [image import](docs/IMAGE_IMPORT.md).
+## Start drawing
 
-Use **Files → Save a copy…** to store an editable `.boox` drawing, and **Files →
-Open drawing…** to resume it on this device or another device running the app.
-Files preserve all layer pixels, ordering, names and settings. PNG export is also
-in Files. New/Open offer saving before replacement. The versioned portable format
-includes per-pen settings and selection, and omits zoom, rotation and history; see [the format contract](docs/SAVE_FORMAT.md).
+Use the pen on the canvas and tap toolbar buttons with a finger or pen. Select a
+tool on the horizontal drawing toolbar; tap it again to open its settings, then
+choose **Apply**. Settings also contains New canvas, Files, Clear, Refresh and
+additional view controls. Clear asks before clearing the selected layer.
 
-The editable native renderer uses the separate `art.boox.probe.lab` package,
-also titled **Draw in Boox**. Build
-with `dev.ps1 run -Renderer recovered` after building the Rust library. It adds a
-Fountain Lab brush; live/final matching remains experimental. See
-[experiment instructions](docs/RECOVERED_RENDERER_EXPERIMENT.md) and the independent
-[official BOOX brush fallback guide](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
+The vertical navigation toolbar contains **Fit**, **Zoom in**, **Zoom out** and
+**Rotate left/right**. To move either toolbar, hold its dotted grip with a finger
+or pen for about half a second, then drag. Pen hover over the grip also supports
+hold-and-drag; lifting the pen drops the toolbar.
 
-Undo/Redo arrow buttons are on the drawing toolbar. In Settings → Gestures,
-enable canvas gestures and select Undo (two-finger tap) and Redo (two-finger double tap), then Apply.
-Toolbar actions remain available when gestures are off; choices are remembered.
+Tap the **four-corners icon** between Redo and Settings to enter Drawing mode.
+Use **Show controls** at the top right, or Android Back, to bring the controls back.
 
-Current native compatibility policy: gray and wide brushes use app-rendered live
-ink after a BOOX system pen-renderer crash. The fast native path remains for black
-brushes up to the accepted 30px footprint. See [the crash workaround](docs/NATIVE_PREVIEW_SAFETY.md).
+### Work with layers
 
-Tap a tool to select it; tap the selected icon again for settings with Apply/Cancel. Marker and Eraser support 1–128 document pixels, with new settings defaulting to 32px and constant width. Ink retains its 1–12px base range. Drawing-tool settings include eight opaque gray shades, remembered independently per pen. Width, dynamics and preview settings are also kept per pen and saved with the drawing. Eraser clears the selected layer to reveal lower layers or paper, with undo/redo and layer-lock protection. Existing settings are retained. Wide/gray Marker uses app preview, which can feel slower than native black/narrow ink; the native crash guard remains. Eraser currently trials native white feedback at <=30px on a single full-opacity layer with alpha lock off; other eraser cases use app preview. See [brush implementation notes](docs/BRUSHES.md) and [performance limitations](docs/PERFORMANCE.md).
+Select a layer by tapping its name or thumbnail. Long-press its name to rename it;
+long-press its thumbnail to adjust **Opacity** or **Alpha lock**. Alpha lock limits
+painting to existing nontransparent pixels. Erasing reveals lower layers or paper.
 
-Native Kotlin raster drawing prototype targeting the original BOOX Go 10.3, Android 12 (API 32).
+### Enable gestures
 
-## Resume here
+Open **Settings > Gestures > Enable canvas gestures**, choose the shortcuts you
+want, and apply the changes.
 
-The user physically accepted `async-handoff-v1` as an **"incredible difference"** in responsiveness. Preserve this baseline when extending the app: immediate artwork/history commits, native live ink, bounded background surface painting from stable snapshots, and guarded reconciliation after a 450ms quiet gap. Read [the performance maintenance rules](AGENTS.md) and [the evidence and architecture](docs/PERFORMANCE.md) before changing this pipeline.
+- **Pan:** drag with two fingers.
+- **Zoom:** pinch with two fingers. Once a gesture starts panning, lift both
+  fingers and start a fresh pinch to zoom.
+- **Rotate:** enable **Rotate: two-finger twist**, twist to select an angle, and
+  lift to apply it.
+- **Undo:** two-finger tap, when its shortcut is enabled.
+- **Redo:** two-finger double tap, when its shortcut is enabled.
 
-For implementation work, read [the feature maintenance guide](docs/FEATURES.md): layers/history, shared icons, extensible settings, live zoom and deferred rotation indicators, and BOOX pen-preview handoff traps.
+Toolbar buttons work with gestures disabled. View rotation affects the display
+and pen coordinates; it does not rotate the saved artwork or PNG export.
 
-Read [the probe guide](docs/PROBE.md) for commands, code structure, diagnostics, and troubleshooting. Read [the handoff](docs/HANDOFF.md) for accepted decisions, device context, validation history, and next steps.
+## Save, reopen and share
 
-The feature sequence, milestone status, and implementation considerations are in [plan.md](plan.md). The fixed-size document, canvas-size selector, and button zoom are implemented. Detailed UI design is deferred.
+Open **Settings > Files**:
 
-Arbitrary-angle view rotation is also implemented with ±15° steps, an exact angle control, and reset. It rotates the display/input coordinates, not document pixels or PNG exports. Rotation tests pass, and the user confirmed live preview and stroke retention through zoom. Temporary preview spill across angled paper edges is accepted. The pre-rotation working version is saved in Git as commit `8d85b0f`, tag `baseline-before-view-rotation`.
+- **Save a copy…** creates an editable `.boox` file using Android's file picker.
+  Each save creates a new copy. Transfer it to another device running the app to
+  continue editing.
+- **Open drawing…** restores a `.boox` drawing with its layers and pen settings.
+  It opens upright and fitted to the screen, with fresh Undo/Redo history.
+- **Import image…** adds a JPG or PNG above the selected layer. Placement is
+  fitted and centered; interactive image move/crop/resize is not implemented.
+- **Export PNG** creates a full-resolution, flattened image for sharing. The
+  current zoom, pan and view rotation do not change the exported pixels.
 
-The prototype builds and runs on the tablet. BOOX live pressure sensitivity and button-zoom alignment are physically confirmed; the canvas accepts pen input while buttons accept fingers. Pressure is normalized to 0–1 and controls a 1–12 document-pixel brush. New canvases support BOOX, square, A5/A4, landscape, and custom sizes. Document dimensions survive view resizing, and PNG export always uses the full document. Two-finger panning and deferred twist rotation are implemented. The user confirmed angle selection works; the latest improvement rotates the angle badge itself to preview the final orientation. Pinch zoom now repaints the complete visible canvas during contact, in 25 percentage-point steps from 75% through 400%; button zoom shares these steps and Fit still shows the whole page. This live update awaits tablet validation. Undo/redo supports up to 10 session actions, including strokes, Clear and layer changes, using buttons or two-finger single/double taps. A collapsible layer panel (right by default, configurable) supports add/select, lock/show, duplicate, merge down, delete and up/down ordering. A canvas-dependent memory limit protects RAM (7 layers on the BOOX preset). Layers persist in the internal checkpoint and portable `.boox` files; use Files to save/open editable drawings. A recorded-stroke replay command is not implemented yet.
+The app also keeps a private restart checkpoint when it pauses. Use **Save a
+copy…** for drawings you want to keep independently of that checkpoint. Undo/Redo
+history is not saved in either portable files or across app restarts. The app
+does not provide automatic cloud synchronization; available save locations depend
+on the file providers installed on your tablet.
 
-Development should run directly on Windows: Windows project folder, Android Studio/SDK, Gradle, ADB, and screen capture. The previous conversation ran inside WSL; we deliberately chose to switch for simpler physical USB access.
+## Current limitations
 
-Suggested project location: `C:\Users\YOUR_NAME\Projects\boox-art`.
+- **Preview and final ink can differ.** BOOX firmware draws live ink; the app
+  commits the layer pixels. Some brushes, opacity, alpha lock and rotated page
+  edges are corrected after pen-up. New pen matching is still being tested.
+- **Gray and wide tools can feel slower.** The firmware crash guard uses
+  app-rendered live ink for unsupported native-preview colors and widths after
+  a system renderer crash was observed. Keep **Settings > Advanced > Firmware
+  crash guard** enabled for normal use. See [native preview safety](docs/NATIVE_PREVIEW_SAFETY.md).
+- **Validation is ongoing.** The release passed build, lint and local unit tests.
+  Earlier device checks found unresolved pixel-comparison failures at certain
+  zoom/rotation settings. Physical testing of toolbar dragging and ordinary-fast
+  and burst handwriting is still pending for the latest changes. See the
+  [handoff](docs/HANDOFF.md) for the recorded results.
+- This is a raster editor with a fixed-size canvas. Infinite canvas, vector
+  editing and a built-in multi-document gallery are not implemented.
 
-Windows commands (PowerShell, from this directory):
+When reporting a problem, include the tablet model, firmware, APK version,
+selected tool and size, zoom/rotation, and steps to reproduce it.
+
+## Build and contribute
+
+The app is written in Kotlin with the BOOX pen SDK. The published preview also
+uses an editable Rust renderer for selected brushes. Windows PowerShell is the
+documented development workflow.
+
+For the default official-SDK build, after installing Android Studio and the SDK
+components described in the [development guide](docs/DEVELOPMENT.md):
 
 ```powershell
+git clone https://github.com/ignasiesbr/draw-in-boox.git
+cd draw-in-boox
 .\dev.ps1 doctor
 .\dev.ps1 build
 .\dev.ps1 run
-.\dev.ps1 test
-.\dev.ps1 capture
 ```
 
-Open this folder in Android Studio to edit and build. `local.properties` contains the local SDK path and is ignored by Git. On another machine, let Studio create it. `dev.ps1` uses the Studio-bundled Java if `JAVA_HOME` is unset. `-Sdk` selects the SDK for ADB/doctor; Gradle uses `local.properties` separately. `-Serial` selects the tablet when needed. The first Gradle build downloads dependencies.
+The default build has a separate package from the published preview. To build the
+preview's recovered renderer, follow [the additional native setup](docs/DEVELOPMENT.md#recovered-renderer-build).
+The guide also covers device tests, local unit tests, diagnostics and troubleshooting.
 
-`run` and `test` visit Home before replacing a running app so it can checkpoint the drawing, then enable the installed probe package (this tablet has disabled it after installation). `test` leaves the app stopped; use `run` to reopen it. Save useful drawings as `.boox` files to retain editable layers independently of the single internal restart checkpoint.
+Before changing pen input, rendering, brushes or history, read [AGENTS.md](AGENTS.md)
+and [PERFORMANCE.md](docs/PERFORMANCE.md) to preserve the accepted drawing behavior.
 
-The gear opens extensible app settings, currently layer-panel side (right by default). Long-press a layer name to rename. Layer selection and toggled icons use black borders; see [e-ink UI conventions](docs/EINK_UI.md).
+| Documentation | Contents |
+| --- | --- |
+| [Development](docs/DEVELOPMENT.md) | Fresh-clone setup, variants, build/run/test and diagnostics |
+| [Feature architecture](docs/FEATURES.md) | Where features live and how to extend them |
+| [Brushes](docs/BRUSHES.md) and [BOOX pens](docs/BOOX_NOTES_PENS.md) | Width calculations, firmware integration and pen matching |
+| [Save format](docs/SAVE_FORMAT.md) | Portable `.boox` file contract |
+| [Handoff](docs/HANDOFF.md) | Development history, physical feedback and outstanding validation |
+| [Plan](plan.md) | Milestones and future work |
 
-Long-press a layer thumbnail for per-layer settings, currently an undoable 0-100% opacity slider with Apply/Cancel.
-
-Layer settings also supports Alpha lock: paint within existing transparency, with combined Apply/Cancel, undo/redo and persistence.
-
-A [replaceable tilt-width modifier](docs/BRUSHES.md) now prepares the brush system: tilted samples widen strokes while pressure still sets base width. BOOX live width now shares the complete pressure/tilt calculation through a guarded native PENCIL update bridge; the user confirmed much better matching before and after pen-up.
+The recovered renderer's source and LGPL-3.0 license notices are in
+[`experimental/boox-renderer`](experimental/boox-renderer/README.md); its license
+texts are also bundled in the recovered APK.
