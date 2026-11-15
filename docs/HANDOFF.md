@@ -1,6 +1,108 @@
 # Research and handoff
 
-Drawing mode (2026-10-27): current marker `drawing mode v1` / `drawing-mode-v1`.
+Navigation toolbar (2026-10-29): current marker `navigation toolbar v1` /
+`navigation-toolbar-v1`. Fit, Zoom in/out and Rotate left/right now occupy a
+compact vertical toolbar, initially at the left. The drawing toolbar retains
+pens, Eraser, Undo/Redo, Drawing mode and Settings. Each has one dotted grip:
+top for vertical, left for horizontal, both allowing free movement on both axes.
+Hold a pen/finger or hover a pen for the platform long-press delay, then move;
+release/hover exit drops. Positions persist as workspace fractions, clamped on
+layout. A drag closes native input using the existing idle overlay handshake,
+then publishes and defers reopening with updated exclusions. Drawing mode hides
+both toolbars and layers. Gestures default off through saved `gestures_enabled`;
+Settings > Gestures > Enable canvas gestures gates pan/pinch/twist/history without
+losing the individual history/twist choices. Toolbar controls always work.
+Native policy, saved crash guard, immutable snapshots, ordered Undo and accepted
+450ms handoff are retained. Official/recovered builds, lint and test-APK compilation
+pass; recovered local unit tests and focused Go103 settings/toolbar, gesture and
+history suites pass. Attached checks exercise all navigation buttons, finger/pen
+holds, pen-hover dragging, native close/reopen, saved positions, translated
+exclusions and drawing mode. An asleep-tablet layout timeout passed after wake;
+an existing settings test now compares against the Activity's loaded guard rather
+than the process's initial static default. No saved crash-guard choice was changed.
+The full suite was not rerun; the prior pixel-comparison failures below remain
+unresolved. The recovered app is installed/reopened; `.tools/navigation-toolbar-v1.png`
+records the checked layout. Physical hold/hover usability, refresh and
+ordinary-fast/burst pen feedback remain pending.
+
+Grip placement follow-up (2026-10-29, same marker): removed the unused grip and
+its space from each toolbar. Navigation is now 64dp wide with only its top grip;
+the drawing toolbar has only its left grip and returns to 64dp height. Both keep
+free movement on both axes. Recovered build/lint, test-APK compilation and focused
+Go103 settings/toolbar checks pass; the updated app is installed/reopened and the
+layout capture above refreshed. Physical drag feel still awaits user feedback.
+
+Queued Undo (2026-10-29): previous marker `queued undo v1` / `queued-undo-v1`.
+Rapid Undo/Redo toolbar taps are retained in order while a stroke/contact/SDK
+point-list commit is pending, and accepted during history's deferred pen reopen.
+Requests run after contact and commit settle, close native input, apply history
+and publish immediately without waiting for the writing quiet timer. Multiple
+requests already queued share one history publication. Focus/file/lifecycle
+freezes, navigation, surface changes and document replacement discard stale work.
+Completed stroke commits no longer cancel a two-finger history tap begun after
+pen lift. Existing two-finger single Undo/double Redo meanings are unchanged.
+The ordinary 450ms writing handoff, immutable worker, compression, brush geometry
+and saved crash guard remain. Recovered app/test builds and lint pass. Focused
+Go103 history checks and stage benchmark pass, including ordered queued taps,
+pending SDK commit, deferred reopen and lifecycle/replacement cancellation.
+The full suite passes history, gesture, brush and preview-policy checks before
+failing DirtyFrameChecks' partial/full comparison at 0 degrees/25% zoom. Separate
+AsyncSurfaceChecks passes real native reader open/reopen, then fails live-zoom
+pixel comparison at 37 degrees. Its first attempt timed out creating the surface
+while the tablet was asleep; the awake retry produced the zoom failure above.
+Full-suite success is therefore not claimed. A pre-existing fallback-test fixture
+painted the same dot twice; each case now clears its isolated document first.
+Installed/reopened on Go103. Physical repeated-tap and ordinary-fast/burst pen
+feedback still require the user; no new physical latency measurement is claimed.
+
+Fit screen toolbar action (2026-10-28): a page-with-inward-arrows button before
+Rotate left uses the existing Settings Fit action (`zoom(ZoomAction.FIT)`). The
+toolbar includes its width while keeping pens scrollable. No viewport math,
+native policy or handoff behavior changes; the `pan lock v1` marker is retained.
+Recovered build/lint pass. Installed and reopened on Go103; device screenshot
+confirms the new button is visible beside rotation. Physical tap feedback is pending.
+
+App branding (2026-10-28): launcher and Settings now show **Draw in Boox**
+for all builds. The user considers the installed recovered build the main app
+and requested removing the Lab/backend suffix from its title. Its package ID
+remains `art.boox.probe.lab` to preserve installed data and renderer isolation.
+The adaptive icon has
+a white background with a small black pencil and scribble, plus a monochrome
+layer for themed launchers. New PNG exports use `Pictures/Draw in Boox`.
+Package IDs, portable drawing format and the `pan lock v1` marker are unchanged.
+Official/recovered APK builds and lint pass; launcher appearance on the tablet
+has not been physically verified. This change does not alter drawing behavior.
+
+Pan lock (2026-10-28): current marker `pan lock v1` / `pan-lock-v1`.
+Pan now locks its gesture mode just like pinch and enabled twist. Once midpoint
+translation starts panning, later finger spacing/twist (including the release
+sample) cannot change zoom/angle or show either badge. Lift contacts to start a
+fresh pinch; cancellation/focus/extra-contact cleanup still resets the lock.
+Initial recognition thresholds/arbitration are unchanged. Native preview policy,
+saved guard, surface snapshots, undo compression and 450ms handoff are retained.
+Focused checks exercise continued pan, stable zoom/angle, reordered pointers,
+release and fresh/cancelled gesture reset. Recovered build/lint, test-APK compilation
+and the focused Go103 gesture suite pass (`dev.ps1 test -Renderer recovered
+-GesturesOnly`). The latest Lab app is installed/reopened; test drawings were
+isolated from the user's private drawing. Physical gesture feel needs feedback.
+
+Undo compression (2026-10-27): previous marker `undo compression v1` /
+`undo-compression-v1`; baseline is `4efc9db`. Pixel commits and history remain
+immediate. Eligible edits keep raw before/after tiles for immediate Undo while a
+single background-priority worker compresses immutable copies. Four reservations,
+min(8MiB, heap/32) raw bytes and the existing ten-action/history budget bound work.
+Clear/layer captures, oversized edits and pressure/backlog cases retain synchronous
+compression; failed worker jobs leave raw Undo usable. Clear/New, branching,
+eviction/dispose and Activity destruction cancel jobs without waiting on UI or
+mutating a new history. No worker receives live bitmaps or changes history order.
+The 450ms/native safety/saved guard/brush/surface pipeline remains intact. Read
+UNDO_COMPRESSION.md for memory accounting, race handling and focused test commands.
+Both renderer builds/lint and test-APK compilation pass; ten local codec/worker
+tests pass. Device pixel suites, stage comparisons and physical
+ordinary-fast/burst handwriting remain pending a connected tablet. No new physical
+latency result is claimed, and native handoff/brush rasterization can still hitch.
+
+Drawing mode (2026-10-27): previous marker `drawing mode v1` / `drawing-mode-v1`.
 New canvases and private drawings with no saved view start centered at 100%.
 Existing checkpoint views, including Fit, still restore; portable Open stays Fit.
 Tap the four-corners icon between Redo and Settings to hide toolbar and layers.

@@ -23,7 +23,7 @@ class MainActivity : Activity() {
     private lateinit var surface: RasterSurface
     private lateinit var adapter: BooxPenAdapter
     private var status = "Draw with the stylus. Fingers do not draw."
-    private var documentInfo = "BOOX Art"
+    private var documentInfo = "Draw in Boox"
     private lateinit var undoButton: EinkIconButton
     private lateinit var redoButton: EinkIconButton
     private lateinit var layerPanel: LayerPanel
@@ -32,6 +32,7 @@ class MainActivity : Activity() {
     private lateinit var drawingArea: FrameLayout
     private lateinit var canvasArea: FrameLayout
     private lateinit var drawingTools: FloatingToolbar
+    private lateinit var navigationTools: FloatingToolbar
     private lateinit var showControlsButton: EinkIconButton
     private var drawingMode = false
     private var preferBoox = true
@@ -55,6 +56,7 @@ class MainActivity : Activity() {
         surface = RasterSurface(this, initialPenSettings = brushStore.snapshot(), strokeFinished = ::recordStroke)
         surface.configureHistoryGestures(settings.undoGestureEnabled, settings.redoGestureEnabled)
         surface.configureRotationGesture(settings.rotationGestureEnabled)
+        surface.configureGestures(settings.gesturesEnabled)
         val savedPreset = brushStore.selected()
         val initialPreset = if (BuildConfig.BOOX_LAB && !getSharedPreferences("app_settings", 0).contains("brush_selected"))
             BrushPreset.LAB_FOUNTAIN else savedPreset.takeIf {
@@ -64,6 +66,7 @@ class MainActivity : Activity() {
         adapter = BooxPenAdapter(surface) { message ->
             status = message
         }
+        surface.historyCommitPending = { adapter.isBusy }
         documentActions = DocumentActions(this, surface, { adapter.isBusy },
             { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() },
             ::schedulePenConfiguration)
@@ -71,9 +74,12 @@ class MainActivity : Activity() {
         surface.unavailable = { adapter.close() }
         surface.viewportWillChange = { surface.inputEnabled = false; adapter.close() }
         surface.navigationStarted = { penConfigurationGeneration++; adapter.close() }
+        surface.historyAvailabilityChanged = {
+            undoButton.isEnabled = surface.canRequestUndo
+            redoButton.isEnabled = surface.canRequestRedo
+        }
         surface.historyChanged = {
-            undoButton.isEnabled = surface.history.canUndo
-            redoButton.isEnabled = surface.history.canRedo
+            surface.historyAvailabilityChanged?.invoke()
             if (::layerPanel.isInitialized) layerPanel.invalidateThumbnails()
         }
         surface.layersChanged = {
@@ -84,7 +90,8 @@ class MainActivity : Activity() {
             status = message; Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             documentActions.documentReady()
         }
-        drawingTools = FloatingToolbar(this, dp(12 + 52 * (BrushPreset.notesToolbar.size + 7) + 27))
+        drawingTools = FloatingToolbar(this, dp(32 + 52 * (BrushPreset.notesToolbar.size + 5) + 18))
+        val drawingControls = drawingTools.controls
         fun addBrush(row: LinearLayout, preset: BrushPreset) {
             val control = EinkIconButton(this, preset.icon, preset.label, toggleable = true).apply {
                 tag = "brush.${preset.id}"
@@ -97,18 +104,18 @@ class MainActivity : Activity() {
             row.addView(control, LinearLayout.LayoutParams(dp(52), dp(52)))
         }
         fun divider() {
-            drawingTools.addView(View(this).apply { setBackgroundColor(Color.BLACK) },
+            drawingControls.addView(View(this).apply { setBackgroundColor(Color.BLACK) },
                 LinearLayout.LayoutParams(dp(1), dp(28)).apply {
                     leftMargin = dp(4); rightMargin = dp(4)
                 })
         }
         val notesTools = LinearLayout(this).apply { tag = "brushes.notes" }
         BrushPreset.notesToolbar.forEach { addBrush(notesTools, it) }
-        drawingTools.addView(HorizontalScrollView(this).apply {
+        drawingControls.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false; addView(notesTools)
         }, LinearLayout.LayoutParams(0, dp(52), 1f))
         divider()
-        addBrush(drawingTools, BrushPreset.ERASER)
+        addBrush(drawingControls, BrushPreset.ERASER)
         divider()
         undoButton = EinkIconButton(this, UiIcon.UNDO, "Undo").apply {
             tag = "Undo"; isEnabled = false
@@ -118,19 +125,28 @@ class MainActivity : Activity() {
             tag = "Redo"; isEnabled = false
             setOnClickListener { if (!surface.redo()) historyBusy() }
         }
-        drawingTools.addView(undoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
-        drawingTools.addView(redoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
-        drawingTools.addView(EinkIconButton(this, UiIcon.FULLSCREEN, "Hide toolbar and layers").apply {
+        drawingControls.addView(undoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
+        drawingControls.addView(redoButton, LinearLayout.LayoutParams(dp(52), dp(52)))
+        drawingControls.addView(EinkIconButton(this, UiIcon.FULLSCREEN, "Hide toolbars and layers").apply {
             tag = "Drawing mode"; setOnClickListener { setDrawingMode(true) }
         }, LinearLayout.LayoutParams(dp(52), dp(52)))
-        drawingTools.addView(EinkIconButton(this, UiIcon.SETTINGS, "Settings").apply {
+        drawingControls.addView(EinkIconButton(this, UiIcon.SETTINGS, "Settings").apply {
             tag = "Settings"; setOnClickListener { showSettings() }
         }, LinearLayout.LayoutParams(dp(52), dp(52)))
-        divider()
-        drawingTools.addView(EinkIconButton(this, UiIcon.ROTATE_LEFT, "Rotate left 15 degrees").apply {
+        navigationTools = FloatingToolbar(this, dp(64), vertical = true, label = "Navigation toolbar")
+        navigationTools.controls.addView(EinkIconButton(this, UiIcon.FIT_SCREEN, "Fit screen").apply {
+            tag = "Fit screen"; setOnClickListener { zoom(ZoomAction.FIT) }
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        navigationTools.controls.addView(EinkIconButton(this, UiIcon.ZOOM_IN, "Zoom in").apply {
+            tag = "Zoom in"; setOnClickListener { zoom(ZoomAction.IN) }
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        navigationTools.controls.addView(EinkIconButton(this, UiIcon.ZOOM_OUT, "Zoom out").apply {
+            tag = "Zoom out"; setOnClickListener { zoom(ZoomAction.OUT) }
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        navigationTools.controls.addView(EinkIconButton(this, UiIcon.ROTATE_LEFT, "Rotate left 15 degrees").apply {
             tag = "Rotate left"; setOnClickListener { rotateView(surface.viewport.rotationDegrees - 15f) }
         }, LinearLayout.LayoutParams(dp(52), dp(52)))
-        drawingTools.addView(EinkIconButton(this, UiIcon.ROTATE_RIGHT, "Rotate right 15 degrees").apply {
+        navigationTools.controls.addView(EinkIconButton(this, UiIcon.ROTATE_RIGHT, "Rotate right 15 degrees").apply {
             tag = "Rotate right"; setOnClickListener { rotateView(surface.viewport.rotationDegrees + 15f) }
         }, LinearLayout.LayoutParams(dp(52), dp(52)))
         updateBrushControls()
@@ -146,7 +162,11 @@ class MainActivity : Activity() {
             Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
                 leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(20)
             })
-        showControlsButton = EinkIconButton(this, UiIcon.SHOW_CONTROLS, "Show toolbar and layers").apply {
+        canvasArea.addView(navigationTools, FrameLayout.LayoutParams(-2, -2,
+            Gravity.LEFT or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(16) })
+        configureToolbarMovement(drawingTools, "drawing_toolbar")
+        configureToolbarMovement(navigationTools, "navigation_toolbar")
+        showControlsButton = EinkIconButton(this, UiIcon.SHOW_CONTROLS, "Show toolbars and layers").apply {
             tag = "Show controls"; visibility = View.GONE
             background = EinkUi.selectionBackground(this@MainActivity, true)
             setOnClickListener { setDrawingMode(false) }
@@ -177,18 +197,35 @@ class MainActivity : Activity() {
         updateDrawingModeControls()
         root.addView(drawingArea, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=drawing-mode-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
+        Log.i("BooxProbe", "Launch ${Build.MODEL} API=${Build.VERSION.SDK_INT} firmware=${Build.DISPLAY} penPipeline=native-eraser-v1 uiRevision=navigation-toolbar-v1 renderer=${BuildConfig.RENDERER_BACKEND} lab=${BuildConfig.BOOX_LAB} firmwareCrashGuard=${NativePreviewPolicy.firmwareCrashGuardEnabled}")
         Log.i("BooxProbe", "Heap=${Runtime.getRuntime().maxMemory()} maxCanvasPixels=${CanvasSizes.maxPixels}")
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private fun configureToolbarMovement(toolbar: FloatingToolbar, key: String) {
+        val preferences = getPreferences(0)
+        if (preferences.contains("${key}_x") && preferences.contains("${key}_y"))
+            toolbar.restorePosition(preferences.getFloat("${key}_x", 0f), preferences.getFloat("${key}_y", 0f))
+        toolbar.beginMove = {
+            if (!resumed || !hasWindowFocus() || adapter.isBusy || documentActions.busy ||
+                drawingTools.isDragging || navigationTools.isDragging || !surface.preparePanelResize()) false
+            else { penConfigurationGeneration++; true }
+        }
+        toolbar.endMove = { x, y ->
+            preferences.edit().putFloat("${key}_x", x).putFloat("${key}_y", y).apply()
+            // Moving an overlay changes both its exposed paper and native exclusion.
+            surface.render()
+            surface.post { schedulePenConfiguration() }
+        }
+    }
 
     private fun arrangeDrawingArea() {
         // The surface always fills the workspace, including below the layers overlay.
         if (canvasArea.parent == null) drawingArea.addView(canvasArea, FrameLayout.LayoutParams(-1, -1))
         val params = FrameLayout.LayoutParams(layerPanel.panelWidth, -2,
             Gravity.TOP or (if (settings.layerPanelSide == LayerPanelSide.LEFT) Gravity.LEFT else Gravity.RIGHT)).apply {
-            // Bound long lists above the 64dp toolbar and its bottom spacing.
+            // Leave space above the drawing toolbar and its bottom spacing.
             bottomMargin = dp(96)
         }
         if (layerPanel.parent == null) drawingArea.addView(layerPanel, params)
@@ -198,7 +235,7 @@ class MainActivity : Activity() {
     /** Captured at native session open; only actual UI rectangles block pen ink. */
     internal fun drawingInputExclusions(): List<Rect> {
         val origin = IntArray(2).also { surface.getLocationOnScreen(it) }
-        return listOf(drawingTools, layerPanel, showControlsButton).mapNotNull { overlay ->
+        return listOf(drawingTools, navigationTools, layerPanel, showControlsButton).mapNotNull { overlay ->
             if (!overlay.isShown || overlay.width <= 0 || overlay.height <= 0) null
             else {
                 val location = IntArray(2).also { overlay.getLocationOnScreen(it) }
@@ -210,7 +247,8 @@ class MainActivity : Activity() {
 
     internal fun setDrawingMode(enabled: Boolean): Boolean {
         if (drawingMode == enabled) return true
-        if (surface.isDrawing || surface.isNavigating || adapter.isBusy || documentActions.busy) {
+        if (surface.isDrawing || surface.isNavigating || adapter.isBusy || documentActions.busy ||
+            drawingTools.isDragging || navigationTools.isDragging) {
             Toast.makeText(this, "Finish drawing or navigation before changing drawing mode.", Toast.LENGTH_SHORT).show()
             return false
         }
@@ -225,6 +263,7 @@ class MainActivity : Activity() {
 
     private fun updateDrawingModeControls() {
         drawingTools.visibility = if (drawingMode) View.GONE else View.VISIBLE
+        navigationTools.visibility = if (drawingMode) View.GONE else View.VISIBLE
         layerPanel.visibility = if (drawingMode) View.GONE else View.VISIBLE
         showControlsButton.visibility = if (drawingMode) View.VISIBLE else View.GONE
     }
@@ -280,6 +319,7 @@ class MainActivity : Activity() {
                 if (guardChanged) Log.i("BooxProbe", "Settings firmwareCrashGuard=${updated.firmwareCrashGuardEnabled}")
                 surface.configureHistoryGestures(updated.undoGestureEnabled, updated.redoGestureEnabled)
                 surface.configureRotationGesture(updated.rotationGestureEnabled)
+                surface.configureGestures(updated.gesturesEnabled)
                 // Position, rather than size, can change. Explicitly reopen raw input
                 // after layout so the BOOX screen-space input region follows the canvas.
                 if (sideChanged) {
@@ -363,6 +403,7 @@ class MainActivity : Activity() {
 
     private fun configurePen() {
         if (documentActions.busy) return
+        if (drawingTools.isDragging || navigationTools.isDragging) return
         if (surface.isNavigating) return
         adapter.close()
         surface.cancelStroke()
@@ -428,7 +469,9 @@ class MainActivity : Activity() {
             else { penConfigurationGeneration++; surface.inputEnabled = false; adapter.close() }
         }
     }
-    override fun onDestroy() { adapter.close(); documentActions.destroy(); strokeDiagnostics.close(); super.onDestroy() }
+    override fun onDestroy() {
+        adapter.close(); documentActions.destroy(); surface.history.clear(); strokeDiagnostics.close(); super.onDestroy()
+    }
 
     @Deprecated("Framework file picker result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -439,17 +482,20 @@ class MainActivity : Activity() {
     private fun updateDocumentInfo() {
         val document = surface.document ?: return
         val angle = String.format(Locale.US, "%.1f", surface.viewport.rotationDegrees)
-        val title = if (BuildConfig.BOOX_LAB) "BOOX Art Lab (${BuildConfig.RENDERER_BACKEND}) · drawing mode v1" else "BOOX Art · drawing mode v1"
+        val title = "Draw in Boox · navigation toolbar v1"
         val guardLabel = if (NativePreviewPolicy.firmwareCrashGuardEnabled) "" else " [guard off]"
         documentInfo = "$title$guardLabel · ${document.spec.width} × ${document.spec.height} · ${(surface.viewport.transform.scale * 100).toInt()}% · $angle°"
     }
 
     private fun zoom(action: ZoomAction) {
-        if (!surface.zoom(action)) Toast.makeText(this, "Lift the pen before changing zoom.", Toast.LENGTH_SHORT).show()
+        if (adapter.isBusy || documentActions.busy || drawingTools.isDragging || navigationTools.isDragging ||
+            !surface.zoom(action))
+            Toast.makeText(this, "Finish drawing or navigation before changing zoom.", Toast.LENGTH_SHORT).show()
     }
 
     private fun rotateView(angle: Float) {
-        if (adapter.isBusy || documentActions.busy || !surface.rotateView(angle))
+        if (adapter.isBusy || documentActions.busy || drawingTools.isDragging || navigationTools.isDragging ||
+            !surface.rotateView(angle))
             Toast.makeText(this, "Finish drawing or navigation before rotating the view.", Toast.LENGTH_SHORT).show()
     }
 
@@ -562,13 +608,13 @@ class MainActivity : Activity() {
     private fun export(): Boolean {
         adapter.close()
         try {
-            val name = "boox-art-${System.currentTimeMillis()}.png"
+            val name = "draw-in-boox-${System.currentTimeMillis()}.png"
             val file = File(filesDir, "export.png")
             check(surface.save(file)) { "Canvas is not ready" }
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, name)
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/BOOX Art")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Draw in Boox")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
             val uri = checkNotNull(contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
@@ -577,7 +623,7 @@ class MainActivity : Activity() {
                 values.clear(); values.put(MediaStore.Images.Media.IS_PENDING, 0)
                 contentResolver.update(uri, values, null, null)
             } catch (error: Exception) { contentResolver.delete(uri, null, null); throw error }
-            Toast.makeText(this, "Saved to Pictures/BOOX Art/$name", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Saved to Pictures/Draw in Boox/$name", Toast.LENGTH_LONG).show()
             Log.i("BooxProbe", "Exported $uri")
             return true
         } catch (error: Exception) {

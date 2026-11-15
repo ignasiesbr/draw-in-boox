@@ -7,8 +7,9 @@ object StrokePerformanceChecks {
     fun run() {
         val document = DrawingDocument.create(CanvasSpec(1860, 2480))
         try {
-            for (count in listOf(100, 500, 1500)) {
-                val history = EditHistory()
+            for (mode in listOf("synchronous", "background")) for (count in listOf(100, 500, 1500)) {
+                val history = if (mode == "synchronous") EditHistory(compression = HistoryCompression(1,
+                    launch = { error("Synchronous benchmark admitted a raw snapshot") })) else EditHistory()
                 val brush = PressureBrush()
                 val timings = mutableListOf<Double>()
                 repeat(14) { iteration ->
@@ -23,7 +24,7 @@ object StrokePerformanceChecks {
                     if (iteration >= 4) timings += StrokePerformance.ms(started)
                 }
                 val sorted = timings.sorted()
-                Log.i("BooxPerf", "benchmark samples=$count runs=${sorted.size} medianMs=${sorted[sorted.size / 2]} p95Ms=${sorted.last()} historyBytes=${history.bytesUsed}")
+                Log.i("BooxPerf", "benchmark historyMode=$mode samples=$count runs=${sorted.size} medianMs=${sorted[sorted.size / 2]} p95Ms=${sorted.last()} retainedHistoryBytes=${history.bytesUsed}")
                 history.clear()
                 document.layer.eraseColor(android.graphics.Color.TRANSPARENT)
             }

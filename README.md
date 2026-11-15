@@ -1,18 +1,33 @@
-# BOOX Art
+# Draw in Boox
+
+The launcher icon is white with a small black pencil and scribble. All builds
+are labeled **Draw in Boox**. Existing installations and `.boox` drawings
+remain compatible; new PNG exports go to `Pictures/Draw in Boox`.
 
 The **floating toolbar** groups Marker, Calligraphy, Fountain, Ink, Brush, Ballpoint,
 and Pencil in fine/coarse textures (Fountain/Brush require the Lab build), followed
-by Eraser, Undo, Redo, Settings and rotate-left/right icons. The rotation icons at
-the right end turn the view by 15 degrees per tap. Studio pens and the old top rows are hidden.
+by Eraser, Undo, Redo, Drawing mode and Settings. A separate small vertical
+**navigation toolbar** on the left contains Fit screen, Zoom in, Zoom out and
+rotate-left/right. Zoom changes in 25 percentage-point steps; rotation changes by
+15 degrees per tap. Fit centers the whole canvas. Studio pens and the old top rows are hidden.
+
+The vertical toolbar has a small dotted grip at the top; the horizontal toolbar
+has one on the left. Either grip moves its toolbar freely in all directions. Hold it with a
+finger or pen, or hover the pen over it, for about half a second, then drag.
+Release or lift the hovering pen to drop it. Positions are remembered and kept
+inside the workspace when its size changes.
 Tap the selected pen again to edit it. The new pens use original SDK
 geometry with firmware-matched settings; physical matching is still under test.
 See [BOOX pens implementation and validation](docs/BOOX_NOTES_PENS.md).
 
 Open **Settings** for Files, New canvas, Clear, Refresh, View controls and input
 mode. Clear still asks before clearing the selected layer. View controls contains
-button zoom and rotation; finger navigation remains available on the canvas.
-Two-finger twist rotation defaults off; enable **Settings > Canvas gestures >
-Rotate: two-finger twist** to use it. Pinch zoom and two-finger pan stay available.
+additional zoom and angle actions. **Canvas gestures default off**, including
+pan, pinch, twist and history taps. Enable **Settings > Gestures > Enable canvas
+gestures** to use them. Undo/Redo shortcuts can be selected individually; twist
+also requires **Rotate: two-finger twist**.
+Once panning starts, spreading or twisting the fingers keeps panning. Lift your
+fingers and start a fresh pinch to zoom.
 
 The layers panel takes only the height its controls and layer list need. The
 canvas continues underneath it; long lists scroll and hiding leaves a small
@@ -20,8 +35,13 @@ expand button. The panel can still sit on either side.
 
 Fresh drawings and New canvas start at **100% zoom**; existing saved views restore.
 Tap the **four-corners icon** between Redo and Settings for Drawing mode, hiding
-the toolbar and layers. Use the small **Show controls** button at top right, or
+both toolbars and layers. Use the small **Show controls** button at top right, or
 Back, to bring them back. Zoom and pan stay where you left them.
+
+Undo remains immediate; admitted strokes now compress copied history tiles in a
+bounded background worker. Large edits and memory/backlog pressure retain the
+synchronous fallback. See [undo compression](docs/UNDO_COMPRESSION.md) for limits
+and validation; physical responsiveness testing is pending.
 
 New documents default to **BOOX screen · landscape**, 2480 × 1860 pixels.
 Use **Swap portrait / landscape** in New canvas for portrait. Existing drawings
@@ -38,14 +58,15 @@ Files preserve all layer pixels, ordering, names and settings. PNG export is als
 in Files. New/Open offer saving before replacement. The versioned portable format
 includes per-pen settings and selection, and omits zoom, rotation and history; see [the format contract](docs/SAVE_FORMAT.md).
 
-The editable native renderer trial runs as a separate **BOOX Art Lab** app. Build
+The editable native renderer uses the separate `art.boox.probe.lab` package,
+also titled **Draw in Boox**. Build
 with `dev.ps1 run -Renderer recovered` after building the Rust library. It adds a
 Fountain Lab brush; live/final matching remains experimental. See
 [experiment instructions](docs/RECOVERED_RENDERER_EXPERIMENT.md) and the independent
 [official BOOX brush fallback guide](docs/BOOX_BUILTIN_BRUSHES_FALLBACK.md).
 
-Undo/Redo arrow buttons are on the drawing toolbar. In Settings → History gestures,
-disable Undo (two-finger tap) and Redo (two-finger double tap) separately, then Apply.
+Undo/Redo arrow buttons are on the drawing toolbar. In Settings → Gestures,
+enable canvas gestures and select Undo (two-finger tap) and Redo (two-finger double tap), then Apply.
 Toolbar actions remain available when gestures are off; choices are remembered.
 
 Current native compatibility policy: gray and wide brushes use app-rendered live

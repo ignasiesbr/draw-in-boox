@@ -20,6 +20,8 @@ class RasterInstrumentation : Instrumentation() {
     private var documentsOnly = false
     private var notesOnly = false
     private var imagesOnly = false
+    private var historyOnly = false
+    private var gesturesOnly = false
     override fun onCreate(arguments: Bundle?) {
         performanceOnly = arguments?.getString("performanceOnly") == "true"
         asyncOnly = arguments?.getString("asyncOnly") == "true"
@@ -30,11 +32,39 @@ class RasterInstrumentation : Instrumentation() {
         documentsOnly = arguments?.getString("documentsOnly") == "true"
         notesOnly = arguments?.getString("notesOnly") == "true"
         imagesOnly = arguments?.getString("imagesOnly") == "true"
+        historyOnly = arguments?.getString("historyOnly") == "true"
+        gesturesOnly = arguments?.getString("gesturesOnly") == "true"
         super.onCreate(arguments); start()
     }
     override fun onStart() {
         val result = Bundle()
         try {
+            if (gesturesOnly) {
+                var failure: Throwable? = null
+                runOnMainSync {
+                    try {
+                        CanvasGestureChecks.run(targetContext)
+                        GestureRotationChecks.run(targetContext)
+                        GestureZoomChecks.run(targetContext)
+                        HistoryTapChecks.run()
+                    } catch (error: Throwable) { failure = error }
+                }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: gesture navigation checks\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
+            if (historyOnly) {
+                var failure: Throwable? = null
+                runOnMainSync {
+                    try { HistoryChecks.run(targetContext); StrokePerformanceChecks.run() }
+                    catch (error: Throwable) { failure = error }
+                }
+                failure?.let { throw it }
+                result.putString("stream", "PASS: async history checks and stage benchmark\n")
+                finish(Activity.RESULT_OK, result)
+                return
+            }
             if (imagesOnly) {
                 var failure: Throwable? = null
                 runOnMainSync { try { ImageImportChecks.run(targetContext) } catch (error: Throwable) { failure = error } }
@@ -54,6 +84,7 @@ class RasterInstrumentation : Instrumentation() {
             }
             if (settingsOnly) {
                 SettingsChecks.run(this)
+                ToolbarChecks.run(this)
                 result.putString("stream", "PASS: settings checks\n")
                 finish(Activity.RESULT_OK, result)
                 return
@@ -177,6 +208,7 @@ class RasterInstrumentation : Instrumentation() {
             ImageImportChecks.actions(this)
             LayerPanelChecks.run(this)
             SettingsChecks.run(this)
+            ToolbarChecks.run(this)
             BrushChecks.dialogs(this)
             MarkerChecks.dialogs(this)
             EraserChecks.dialogs(this)

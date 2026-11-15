@@ -192,7 +192,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
                 if (session != generation) return
                 width?.finish()
                 onUi { if (session == generation) {
-                    view.endRawStroke(); presenter.end()
+                    view.endRawStroke(); presenter.end(); view.historyInputSettled()
                 } }
                 Log.d("BooxProbe", "raw end x=${p.x} y=${p.y} pressure=${p.pressure}")
             }
@@ -225,6 +225,7 @@ class BooxPenAdapter(private val view: RasterSurface, private val status: (Strin
                                 deferPresentation = true)?.let { presenter.committed(it) }
                         } else if (spec != null) presenter.committed(RectF(0f, 0f, spec.width.toFloat(), spec.height.toFloat()))
                         awaitingStrokeCommit = false
+                        view.historyInputSettled()
                         StrokePerformance.log("handoffQueued samples=${samples.size} mapMs=${StrokePerformance.ms(received, mapped)} queueMs=${StrokePerformance.ms(mapped, dequeued)} commitMs=${StrokePerformance.ms(dequeued)} totalMs=${StrokePerformance.ms(received)}")
                     }
                 }

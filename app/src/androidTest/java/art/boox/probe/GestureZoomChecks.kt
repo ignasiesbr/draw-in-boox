@@ -37,6 +37,7 @@ object GestureZoomChecks {
         }
         val strokes = mutableListOf<PenStroke>()
         val view = RasterSurface(testContext, CanvasSpec(512, 512)) { strokes += it }
+        view.configureGestures(true)
         view.configureRotationGesture(true)
         view.surfaceChanged(view.holder, 0, 400, 400)
         view.createDocument(CanvasSpec(512, 512))
@@ -121,14 +122,31 @@ object GestureZoomChecks {
         check(view.zoomPreviewLevel == null && view.rotationPreviewAngle == selectedAngle)
         send(view, MotionEvent.ACTION_CANCEL, 2f, 30f)
 
-        // Pan can transition to live zoom; cancellation retains that earlier pan.
+        // Pan owns the pair: later pinch/twist must not show either badge or change scale.
         start()
         send(view, MotionEvent.ACTION_MOVE, x = 220f)
         val panned = view.viewport.transform
-        send(view, MotionEvent.ACTION_MOVE, 1.6f, x = 240f)
+        send(view, MotionEvent.ACTION_MOVE, 1.6f, 30f, x = 240f, reversed = true)
+        check(view.zoomPreviewLevel == null && view.rotationPreviewAngle == null)
+        check(view.viewport.transform.scale == panned.scale && view.viewport.rotationDegrees == 37.25f)
+        check(abs(view.viewport.transform.x - panned.x - 20f) < 0.002f) { "Pinch interrupted an active pan" }
+        // Even a large final spacing change cannot turn the release into zoom.
+        send(view, MotionEvent.ACTION_POINTER_UP, 4f, 60f, x = 240f)
+        send(view, MotionEvent.ACTION_UP, 4f, 60f, x = 240f)
+        check(!view.isNavigating && view.zoomPreviewLevel == null && view.viewport.transform.scale == panned.scale)
+
+        // Lifting the pair permits zoom in the next gesture; cancellation clears pan lock too.
+        start()
+        send(view, MotionEvent.ACTION_MOVE, 1.6f)
         check(view.zoomPreviewLevel?.percent == 150 && view.viewport.transform.scale == 1.5f)
         send(view, MotionEvent.ACTION_CANCEL, 1.6f)
-        check(abs(view.viewport.transform.x - panned.x) < 0.002f && abs(view.viewport.transform.y - panned.y) < 0.002f)
+        start()
+        send(view, MotionEvent.ACTION_MOVE, x = 220f)
+        send(view, MotionEvent.ACTION_CANCEL, x = 220f)
+        start()
+        send(view, MotionEvent.ACTION_MOVE, 2f)
+        check(view.zoomPreviewLevel?.percent == 200)
+        send(view, MotionEvent.ACTION_CANCEL, 2f)
 
         view.beginRawStroke()
         start()

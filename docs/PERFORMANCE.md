@@ -1,6 +1,65 @@
 # Stroke responsiveness investigation
 
-Current UI marker: `drawing mode v1` / `drawing-mode-v1` (2026-10-27).
+Current UI marker: `navigation toolbar v1` / `navigation-toolbar-v1` (2026-10-29).
+Fit, +/-25-point zoom and +/-15-degree rotation now share a separate vertical
+overlay. Each toolbar has one hold/hover grip (top for vertical, left for horizontal)
+allowing free movement on both axes, with saved, workspace-clamped positions.
+Movement closes native input while idle, then publishes and defers reopening with
+both measured, translated exclusion rectangles. Pending SDK commits/file work and
+active drawing/navigation block movement. Canvas gestures, including history taps,
+are gated by a cached saved master switch defaulting false; the existing individual
+shortcut choices remain available. No preference reads occur per sample. The
+accepted native preview policy, saved crash guard, immutable surface worker,
+ordered history and 450ms writing handoff remain intact. Physical grip/hover feel
+and ordinary-fast/burst pen feedback remain pending; no latency result is claimed.
+Both renderer builds/lint and test-APK compilation pass; recovered unit tests and
+focused Go103 settings/toolbar, gesture and history checks pass. Attached toolbar
+checks verify idle input closes during finger/pen/hover movement and reopens after
+drop, including native-reader state and translated exclusions. The full suite was
+not rerun; previously recorded pixel-comparison failures remain unresolved.
+
+Previous UI marker: `queued undo v1` / `queued-undo-v1` (2026-10-29).
+Undo/Redo retain ordered requests while contact or the SDK completed-list commit
+is pending. Once both settle, history applies and publishes immediately through
+the existing native-close/full-frame/deferred-reopen path; additional toolbar
+taps during that reopen remain actionable. Ordinary writing retains the accepted
+450ms quiet gap, immutable presentation worker, brush geometry and saved crash
+guard. Commit no longer cancels a history tap started after pen lift; new contact,
+navigation, focus/lifecycle freezes and document replacement still cancel stale
+gestures/requests. Availability updates do not invalidate layer thumbnails.
+Automated and physical validation for this revision is recorded in HANDOFF.md;
+this change establishes no new physical latency result.
+
+Previous UI marker: `pan lock v1` / `pan-lock-v1` (2026-10-28).
+The first recognized navigation mode now owns its finger pair, including Pan.
+Later spacing/twist changes keep panning without changing zoom/angle or showing
+either badge. Release/cancel/focus loss/extra contacts clear the mode; start a new
+gesture to pinch. The existing first-event thresholds and pinch/twist arbitration,
+native close/reopen, immutable surface worker, undo compression, saved crash guard
+and accepted 450ms pen handoff are retained. Gesture checks cover span changes,
+reordered indices, a pinch-like release and fresh/cancelled gesture reset. This
+recognition change establishes no new physical pen latency result. Recovered
+build/lint and test-APK compilation pass; focused pan/rotation/zoom/history-tap
+checks pass on Go103. The updated Lab app is installed and reopened. Physical
+gesture feel and ordinary-fast/burst pen feedback still need user confirmation.
+
+Previous UI marker: `undo compression v1` / `undo-compression-v1` (2026-10-27).
+Baseline checkpoint: `4efc9db`. Admitted pixel edits now capture bounded raw tile
+copies on UI, commit pixels/history immediately and compress only those immutable
+copies on one background-priority worker. Undo/Redo work before, during and after
+compression. Four reservations and min(8MiB, heap/32) raw bytes bound capture plus
+queued/active work; the existing history budget includes raw tiles. Large edits,
+memory/history pressure, a full queue and full Clear retain synchronous capture.
+Worker failures retain valid raw history. Clear/New, branching, eviction/dispose
+and Activity destruction cancel obsolete jobs without UI joins or late callbacks.
+Native safety, pressure/tilt geometry, saved crash guard, surface worker and 450ms
+handoff remain unchanged. See UNDO_COMPRESSION.md for ownership, fallback and tests.
+Both renderer builds/lint and test-APK compilation pass, along with ten local JVM
+codec/worker checks. Pixel/device suites, paired on-device commit stage timings
+and physical ordinary-fast/burst input remain pending a connected tablet. This
+does not establish that all commit hitches disappear; raster/copy/native work stays.
+
+Previous UI marker: `drawing mode v1` / `drawing-mode-v1` (2026-10-27).
 Fresh/private drawings without a saved viewport and New canvas start centered at
 100%; saved Fit/manual views still restore, and portable Open retains upright Fit.
 The toolbar's four-corners action hides toolbar and layers, leaving a 52dp Show

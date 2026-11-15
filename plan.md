@@ -102,6 +102,10 @@ Validation:
 
 ## 3. Finger navigation: pinch and pan
 
+Once panning starts it owns the finger pair; later spacing/twist cannot switch
+to zoom or rotation. Lift contacts and start a fresh gesture to select another
+mode. Initial thresholds and pinch/twist arbitration are unchanged.
+
 Rotation gesture now defaults off, with a saved Settings > Canvas gestures choice
 to enable it. Two icons at the right end of the toolbar rotate left/right by 15
 degrees without requiring a twist. Disabled twist cannot claim pinch/pan input.
@@ -159,6 +163,11 @@ Validation:
 - Saved brush settings survive restart; old strokes and exported artwork do not change when settings change.
 
 ## 5. Layers, undo/redo, and editable persistence
+
+Admitted pixel edits now keep immediately usable raw history tiles while a bounded
+worker compresses immutable copies. Large/low-memory/backlog cases and Clear/layer
+snapshots keep synchronous capture. See docs/UNDO_COMPRESSION.md for accounting,
+cancellation, tests and pending physical validation against checkpoint `4efc9db`.
 
 The layers panel now wraps its content height over a full-workspace canvas. Long
 lists scroll above the toolbar; collapsed state uses only a small expand control.

@@ -72,14 +72,14 @@ object DocumentFile {
                     "Invalid or duplicate archive entries"
                 }
             }
-            val entry = requireNotNull(zip.getEntry("manifest.json")) { "This is not a BOOX Art drawing" }
+            val entry = requireNotNull(zip.getEntry("manifest.json")) { "This is not a Draw in Boox drawing" }
             require(entry.size in 1..MAX_MANIFEST_BYTES.toLong()) { "Invalid drawing manifest size" }
             val bytes = zip.getInputStream(entry).use { it.readBytesLimited(MAX_MANIFEST_BYTES.toLong()) }
             require(CRC32().apply { update(bytes) }.value == entry.crc) { "Drawing manifest checksum failed" }
             val manifest = JSONObject(bytes.toString(Charsets.UTF_8))
             require(manifest.getString("format") == "art.boox.document") { "Unknown drawing format" }
             val version = manifest.getJSONObject("version")
-            require(integer(version, "major") == 1) { "This drawing needs a newer version of BOOX Art" }
+            require(integer(version, "major") == 1) { "This drawing needs a newer version of Draw in Boox" }
             require(integer(version, "minor") >= 0) { "Invalid drawing version" }
             val features = if (manifest.has("requiredFeatures")) manifest.getJSONArray("requiredFeatures") else JSONArray()
             for (i in 0 until features.length()) require(features.getString(i) in supportedFeatures) {

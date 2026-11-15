@@ -71,6 +71,7 @@ object AsyncSurfaceChecks {
             onMain {
                 val isolated = object : ContextWrapper(activity) { override fun getFilesDir() = directory.apply { mkdirs() } }
                 surface = RasterSurface(isolated, CanvasSpec(260, 260)) { }
+                surface.configureGestures(true)
                 surface.inputEnabled = false
                 dialog = AlertDialog.Builder(activity).setView(surface).create().also {
                     it.show(); it.window!!.setLayout(-1, (350 * activity.resources.displayMetrics.density).toInt())

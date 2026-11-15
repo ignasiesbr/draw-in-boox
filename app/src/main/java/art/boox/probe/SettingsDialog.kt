@@ -60,15 +60,20 @@ object SettingsDialog {
         }
         sides.check(checkNotNull(choices[settings.layerPanelSide]).id)
         content.addView(sides)
-        content.addView(TextView(context).apply {
-            text = "History gestures"; textSize = 18f; setTextColor(Color.BLACK)
-            setPadding(0, dp(16), 0, 0)
-        })
         fun gestureChoice(label: String, tagName: String, enabled: Boolean) = CheckBox(context).apply {
             text = label; tag = tagName; isChecked = enabled
             textSize = 18f; minHeight = dp(56); setTextColor(Color.BLACK)
             content.addView(this)
         }
+        content.addView(TextView(context).apply {
+            text = "Gestures"; textSize = 18f; setTextColor(Color.BLACK)
+            setPadding(0, dp(16), 0, 0)
+        })
+        val gestures = gestureChoice("Enable canvas gestures", "Enable gestures", settings.gesturesEnabled)
+        content.addView(TextView(context).apply {
+            text = "Two-finger pan, pinch zoom and the shortcuts below. Off by default; toolbar controls always work."
+            textSize = 14f; setTextColor(Color.DKGRAY)
+        })
         val undoGesture = gestureChoice("Undo: two-finger tap", "Undo gesture", settings.undoGestureEnabled)
         val redoGesture = gestureChoice("Redo: two-finger double tap", "Redo gesture", settings.redoGestureEnabled)
         content.addView(TextView(context).apply {
@@ -94,6 +99,7 @@ object SettingsDialog {
             if (apply(settings.copy(layerPanelSide = side, undoGestureEnabled = undoGesture.isChecked,
                     redoGestureEnabled = redoGesture.isChecked,
                     rotationGestureEnabled = rotationGesture.isChecked,
+                    gesturesEnabled = gestures.isChecked,
                     firmwareCrashGuardEnabled = crashGuard.isChecked))) dialog.dismiss()
         }
         return dialog

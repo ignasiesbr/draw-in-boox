@@ -1,5 +1,38 @@
 # Feature maintenance guide
 
+Navigation toolbar (`navigation-toolbar-v1`): Fit, Zoom in/out and Rotate left/right
+live in a separate vertical `FloatingToolbar`. Both toolbars expose a `controls`
+container plus one dotted grip: top for vertical, left for horizontal. Either grip
+moves freely on both axes after a long press or pen-hover dwell;
+the existing idle overlay close/publish/deferred-reopen handshake protects native
+input while moving. Reopening captures translated screen rectangles for both.
+Positions persist as workspace fractions, clamped after layout; drawing mode hides
+both. `gestures_enabled` defaults false and `RasterSurface.configureGestures`
+cancels queued history taps/navigation before updating the cached master switch.
+It gates all canvas gesture recognition without affecting pen input or buttons.
+Individual Undo/Redo/twist preferences remain selections within that switch.
+ToolbarChecks covers attached finger/pen/hover movement and exclusions; gesture
+fixtures explicitly opt in. Earlier layout/default descriptions below are historical.
+
+Fit screen toolbar action: the page-with-inward-arrows button before the rotation
+buttons calls the same `zoom(ZoomAction.FIT)` path as Settings > View controls >
+Fit. Toolbar width includes the extra fixed action; pens retain their scrolling
+area. Viewport math, input guards and native reopen coordination are unchanged.
+
+Pan lock (`pan-lock-v1`): the first recognized mode (pan, pinch, enabled twist)
+owns the finger pair until navigation ends. Later spacing/twist cannot steal a
+pan. Lift contacts and start a new gesture to zoom. Thresholds, cancellation and
+the existing native input/presentation handshake remain unchanged.
+
+Undo compression (`undo-compression-v1`): pixel/history commits stay on UI, with
+bounded immutable raw tiles immediately available for Undo. The worker may only
+replace tile storage with smaller compressed bytes, never mutate bitmap/history
+order. Clear/New, branching, eviction/dispose and Activity destruction cancel jobs;
+there are no completion callbacks that can resurrect actions. Four reservations,
+raw bytes, retained history and heap headroom gate admission; pressure/backlog,
+large edits and full Clear retain synchronous capture. Layer snapshots stay
+synchronous. See UNDO_COMPRESSION.md before changing ownership or memory bounds.
+
 Drawing mode (`drawing-mode-v1`): the four-corners toolbar action hides both
 toolbar and layers. A small top-right Show controls button or Back restores them.
 Mode changes retain surface size, viewport, artwork and expansion state. Native
@@ -149,7 +182,7 @@ Current semantics:
 
 Use `RasterSurface.applyLayerCommand(...)` from UI. It guards drawing/navigation and coordinates the BOOX handoff. Add structural behavior as a `LayerCommand`; implement/validate the document operation centrally. `affectedPixels()` must identify every layer whose pixels can change or disappear. Metadata-only operations leave it empty. Do not mutate flags/bitmaps directly from a widget and bypass history/cache invalidation.
 
-`EditHistory` combines raster and structural entries in one bounded stack: 10 actions, compressed bytes capped at min(32MiB, heap/8). Pixel entries capture lossless before/after 128px tiles and resolve their recorded layer ID on restore. Structural entries keep before/after stack metadata and compressed pixels only for inserted/removed/changed layers. Undo restores the appropriate selection. No-op commands preserve redo; effective new edits discard it. Restart/new canvas resets history; navigation/settings/selection are excluded. Future fill/cut tools should implement `DocumentEdit` and conservatively declare all affected regions.
+`EditHistory` combines raster and structural entries in one bounded stack: 10 actions, retained raw/compressed patch bytes capped at min(32MiB, heap/8). Pixel entries capture lossless before/after 128px tiles and resolve their recorded layer ID on restore. Admitted raw snapshots are immediately usable and compressed by `HistoryCompression`/`HistoryTile` without background bitmap/history-order mutation; see UNDO_COMPRESSION.md for admission and cancellation. Structural entries keep before/after stack metadata and compressed pixels only for inserted/removed/changed layers. Undo restores the appropriate selection. No-op commands preserve redo; effective new edits discard it. Restart/new canvas resets history; navigation/settings/selection are excluded. Future fill/cut tools should implement `DocumentEdit` and conservatively declare all affected regions.
 
 Composition uses a lazily allocated transparent bitmap cache for multiple layers, invalidated by dirty regions or structure changes. Navigation reuses it. A single visible layer can draw directly. Android pending strokes render at their selected layer position. Thumbnails scale existing source bitmaps without allocating copies; ordinary stroke updates invalidate thumbnails rather than rebuild all controls.
 
@@ -199,7 +232,7 @@ There are two independent preview systems: BOOX pen ink follows the digitizer th
 
 `DocumentViewport` owns scale, translation and clockwise rotation; positive angles rotate clockwise and normalize to [-180,180). Artwork dimensions/pixels and PNG orientation stay unchanged. Fit computes the rotated page bounds; Fit/100% retain the angle. New canvas resets the view. Toolbar Angle accepts arbitrary finite/fractional angles; gesture rotation chooses whole degrees. Bounds can limit center/anchor preservation.
 
-`CanvasGestures` tracks a stable pair of finger IDs. Pan begins beyond Android touch slop and is live. A deliberate pinch or enabled twist can take over; the first selected mode remains locked until the gesture ends. Rotation is disabled by default through the saved Canvas gestures preference. When enabled and both thresholds are crossed in one event, normalized gesture strength resolves intent. Keep this ownership policy when adding gestures rather than making independent recognizers compete.
+`CanvasGestures` tracks a stable pair of finger IDs. Pan begins beyond Android touch slop and is live. The first selected mode (Pan, Zoom or enabled Rotation) remains locked until the gesture ends; later spacing/twist cannot take over an active pan. Lift contacts and start a fresh pair to zoom instead. Rotation is disabled by default through the saved Canvas gestures preference. When enabled and pinch/twist thresholds are both crossed in the first event, normalized gesture strength resolves intent. Keep this ownership policy when adding gestures rather than making independent recognizers compete.
 
 | Gesture | Activation | Feedback | Commit |
 | --- | --- | --- | --- |
@@ -211,7 +244,7 @@ Enabled rotation uses the gesture-start angle plus accumulated bearing changes, 
 
 `ZoomLevels` selects the closest absolute scale from gesture-start scale times span ratio, in 25 percentage-point steps from 75% through 400%. Toolbar Zoom in/out use the same ordered steps. Fit remains independent and may show a smaller whole page. The zoom anchor is the midpoint when pinch first selects a level; it stays fixed for that selection. There is no reset snap. Whole-screen navigation frames use the immutable surface worker, coalesced on animation frames with one snapshot in flight; newer requests replace pending demand while an in-flight view can finish, avoiding display starvation. Each submission seeds the whole screen. Upright source cropping and memory/synchronous fallback remain. Release/cancel invalidate stale frames and synchronously publish the final view before pen reconfiguration.
 
-Cancellation/focus loss/extra contacts restore the view at pinch selection (retaining any prior pan) and discard pending rotation; rotation also cancels if contacts become too close. Lift navigation contacts before drawing again. Pen input takes priority. `HistoryTapGestures` observes the same stream before navigation: a valid stationary two-finger tap undoes, two consecutive taps redo. Single undo waits the platform double-tap timeout. Navigation begin cancels tap candidates/timers, and cancellation is shared across lifecycle changes. Preserve this arbitration when extending gestures.
+Cancellation/focus loss/extra contacts restore the view at pinch selection or discard pending rotation, while a pan retains its applied translation; rotation also cancels if contacts become too close. Lift navigation contacts before drawing again. Pen input takes priority. `HistoryTapGestures` observes the same stream before navigation: a valid stationary two-finger tap undoes, two consecutive taps redo. Single undo waits the platform double-tap timeout. Navigation begin cancels tap candidates/timers, and cancellation is shared across lifecycle changes. Preserve this arbitration when extending gestures.
 
 `GestureIndicator` is a sibling overlay above `RasterSurface`, not painted into artwork or the composite cache. Its fixed 280dp square contains the 240x96dp badge at any angle so old corners can be repainted. Angle rotates text and background together; zoom stays upright. Digit redraws coalesce at 33ms; the chosen value updates immediately and is what gets committed, even before the next paint. Per-view DU refresh is enabled while visible and restored on hide, with ordinary Android refresh fallback. Do not enable app-wide fast mode. This is an e-ink interaction choice, not a promise of firmware-ink latency.
 

@@ -37,6 +37,14 @@ object CanvasGestureChecks {
         val secondDown = MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
         val initial = view.viewport.transform
 
+        check(!view.gesturesEnabled)
+        send(view, MotionEvent.ACTION_DOWN, a)
+        send(view, secondDown, a, b)
+        send(view, MotionEvent.ACTION_MOVE, a.copy(x = 150f), b.copy(x = 300f))
+        send(view, MotionEvent.ACTION_UP, a, b)
+        check(began == 0 && view.viewport.transform == initial) { "Default-off gestures navigated" }
+        view.configureGestures(true)
+
         send(view, MotionEvent.ACTION_DOWN, a)
         send(view, MotionEvent.ACTION_MOVE, a.copy(x = 170f))
         check(view.viewport.transform == initial) { "One finger panned the paper" }
@@ -94,7 +102,18 @@ object CanvasGestureChecks {
         send(view, MotionEvent.ACTION_CANCEL, a, b)
         check(strokes.isEmpty()) { "Finger navigation painted a stroke" }
 
-        // Pen coordinates after a translated and rotated view still map to document pixels.
+        // Disabling the master switch cancels an active stream, including its previews.
+        send(view, MotionEvent.ACTION_DOWN, a)
+        send(view, secondDown, a, b)
+        send(view, MotionEvent.ACTION_MOVE, a.copy(x = 150f), b.copy(x = 250f))
+        check(view.isNavigating)
+        view.configureGestures(false)
+        val disabled = view.viewport.transform
+        send(view, MotionEvent.ACTION_MOVE, a.copy(x = 250f), b.copy(x = 350f))
+        check(!view.isNavigating && view.viewport.transform == disabled)
+        check(view.zoomPreviewLevel == null && view.rotationPreviewAngle == null)
+
+        // Pen input still works while all canvas gestures are disabled.
         view.viewport.change(ZoomAction.FIT)
         view.viewport.panBy(30f, 20f)
         val point = view.viewport.transform.toView(256f, 256f)

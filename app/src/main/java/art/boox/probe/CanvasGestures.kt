@@ -7,7 +7,8 @@ import kotlin.math.atan2
 import kotlin.math.ln
 
 /** Owns finger navigation only. Pen input and viewport math remain separate.
- * Translation and stepped zoom are live; twist previews a rotation applied on release. */
+ * Translation and stepped zoom are live; twist previews a rotation applied on release.
+ * The first selected mode owns the finger pair until navigation ends. */
 class CanvasGestures(
     private val touchSlop: Float,
     private val minRotationSpan: Float,
@@ -29,7 +30,7 @@ class CanvasGestures(
     private var lastY = 0f
     private var lastBearing = 0f
     private var turn = 0f
-    private enum class Selection { ROTATION, ZOOM }
+    private enum class Selection { PAN, ROTATION, ZOOM }
     private var selection: Selection? = null
     private var startSpan = 0f
 
@@ -72,13 +73,14 @@ class CanvasGestures(
             selection = when {
                 pinch && (!twist || pinchStrength > abs(turn) / 5f) -> Selection.ZOOM
                 twist -> Selection.ROTATION
-                else -> null
+                else -> Selection.PAN
             }
         }
         when (selection) {
             Selection.ROTATION -> rotation(turn)
             Selection.ZOOM -> zoom(ratio, x, y)
-            null -> pan(x - lastX, y - lastY)
+            Selection.PAN -> pan(x - lastX, y - lastY)
+            null -> Unit
         }
         lastX = x; lastY = y
     }

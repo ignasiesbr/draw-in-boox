@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Keep the pencil and scribble inside every adaptive launcher mask. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#171717"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M48,59 L53,49 L68,34 Q70,32 72,34 L75,37 Q77,39 75,41 L60,56 Z M53,49 L60,56 M65,37 L72,44 M56.5,52.5 L68.5,40.5" />
+    <path
+        android:fillColor="#171717"
+        android:pathData="M48,59 L50.2,54.6 L52.4,56.8 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#171717"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,58 C34,61 31,68 36,69 C41,70 52,61 49,61 C46,60 37,74 41,74 C45,75 58,65 56,66 C53,68 48,74 52,74 C56,74 61,70 65,71" />
+</vector>

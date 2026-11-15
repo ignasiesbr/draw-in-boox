@@ -16,7 +16,7 @@ import android.widget.ImageButton
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL, CALLIGRAPHY, BALLPOINT, ROTATE_LEFT, ROTATE_RIGHT, FULLSCREEN, SHOW_CONTROLS }
+enum class UiIcon { LAYERS, HIDE, ADD, DUPLICATE, MERGE_DOWN, DELETE, VISIBLE, HIDDEN, LOCK, UNLOCK, UP, DOWN, SETTINGS, INK, TILT, MONOLINE, MARKER, ERASER, SIZE, SHADE, UNDO, REDO, BRUSH, PENCIL, CHARCOAL, CALLIGRAPHY, BALLPOINT, ROTATE_LEFT, ROTATE_RIGHT, FULLSCREEN, SHOW_CONTROLS, FIT_SCREEN, ZOOM_IN, ZOOM_OUT }
 
 /** Shared monochrome action/toggle. State is model-driven; clicking never silently toggles it.
  * No elevation, ripple or animated state; checked toggles have a 2dp black border. */
@@ -105,6 +105,16 @@ class UiIconDrawable(private val icon: UiIcon) : Drawable() {
             canvas.drawRect(left, top, right, bottom, paint)
         }
         when (icon) {
+            UiIcon.ZOOM_IN, UiIcon.ZOOM_OUT -> {
+                canvas.drawCircle(10f, 10f, 7f, paint)
+                line(15f, 15f, 22f, 22f); line(6f, 10f, 14f, 10f)
+                if (icon == UiIcon.ZOOM_IN) line(10f, 6f, 10f, 14f)
+            }
+            UiIcon.FIT_SCREEN -> {
+                box(8f, 5f, 16f, 19f)
+                line(1f, 12f, 5f, 12f); line(3f, 10f, 5f, 12f, 3f, 14f)
+                line(23f, 12f, 19f, 12f); line(21f, 10f, 19f, 12f, 21f, 14f)
+            }
             UiIcon.FULLSCREEN -> {
                 line(3f, 9f, 3f, 3f, 9f, 3f); line(15f, 3f, 21f, 3f, 21f, 9f)
                 line(21f, 15f, 21f, 21f, 15f, 21f); line(9f, 21f, 3f, 21f, 3f, 15f)

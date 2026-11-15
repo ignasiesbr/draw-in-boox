@@ -26,7 +26,15 @@ class RasterSurface(
     private var strokeBrush = brush
     val history = EditHistory()
     var historyChanged: (() -> Unit)? = null
+    var historyAvailabilityChanged: (() -> Unit)? = null
     var historyFeedback: ((String) -> Unit)? = null
+    // The SDK can end contact before delivering the completed point list.
+    var historyCommitPending: () -> Boolean = { false }
+    private val historyRequests = java.util.ArrayDeque<Boolean>()
+    private var changingHistory = false
+    private var historyReopening = false
+    val canRequestUndo: Boolean get() = history.canUndo || historyCommitPending() || isDrawing
+    val canRequestRedo: Boolean get() = history.canRedo || historyRequests.contains(false)
     private val store = DocumentStore(context.filesDir)
     private var penSettings = initialPenSettings
     fun settingsFor(preset: BrushPreset) = penSettings.get(preset)
@@ -59,7 +67,13 @@ class RasterSurface(
     private var loadFailed = false
     internal val initializationComplete: Boolean get() = document != null || loadFailed
     var inputEnabled = true
-        set(value) { field = value; if (!value) { historyTaps.cancel(); gestures.cancel(); cancelStroke() } }
+        set(value) {
+            field = value
+            if (!value) {
+                if (!changingHistory) { historyRequests.clear(); historyReopening = false }
+                historyTaps.cancel(); gestures.cancel(); cancelStroke()
+            } else historyReopening = false
+        }
     var rawInput = false
         set(value) { if (field != value) cancelStroke(); field = value }
     var ready: (() -> Unit)? = null
@@ -82,6 +96,8 @@ class RasterSurface(
     private var rotationSnappedToZero = false
     var rotationGestureEnabled = false
         private set
+    var gesturesEnabled = false
+        private set
     val isNavigating: Boolean get() = gestures.active
     private val gestures = CanvasGestures(ViewConfiguration.get(context).scaledTouchSlop.toFloat(),
         minRotationSpan = 48f * resources.displayMetrics.density,
@@ -96,6 +112,7 @@ class RasterSurface(
                 navigationNeedsFrame = false
                 rotationSnappedToZero = false
                 historyTaps.cancel()
+                historyRequests.clear()
                 navigationStarted?.invoke(); true
             }
         },
@@ -172,12 +189,23 @@ class RasterSurface(
         rotationGestureEnabled = enabled
     }
 
+    fun configureGestures(enabled: Boolean) {
+        if (gesturesEnabled == enabled) return
+        historyTaps.cancel()
+        gestures.cancel()
+        gesturesEnabled = enabled
+    }
+
     init { tag = "Drawing surface"; holder.addCallback(this) }
 
     override fun surfaceCreated(holder: SurfaceHolder) = render()
-    override fun surfaceDestroyed(holder: SurfaceHolder) { invalidateAsyncFrames(); historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke() }
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        historyRequests.clear(); historyReopening = false
+        invalidateAsyncFrames(); historyTaps.cancel(); gestures.cancel(); cancelStroke(); unavailable?.invoke()
+    }
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         if (width <= 0 || height <= 0 || loadFailed) return
+        historyRequests.clear(); historyReopening = false
         historyTaps.cancel()
         gestures.cancel()
         cancelStroke()
@@ -232,6 +260,7 @@ class RasterSurface(
         viewportWillChange?.invoke()
         historyTaps.cancel()
         cancelStroke()
+        historyRequests.clear(); historyReopening = false
         history.clear(); historyChanged?.invoke()
         document?.recycle()
         document = replacement
@@ -263,8 +292,15 @@ class RasterSurface(
         return true
     }
 
-    fun beginRawStroke() { historyTaps.cancel(); rawStroke = true }
+    fun beginRawStroke() { historyTaps.cancel(); rawStroke = true; historyAvailabilityChanged?.invoke() }
     fun endRawStroke() { rawStroke = false }
+
+    /** Called after both contact and the completed-list commit have settled. */
+    fun historyInputSettled() {
+        // Leave the SDK callback before closing its session for Undo.
+        if (historyRequests.isNotEmpty()) post { drainHistoryRequests() }
+        historyAvailabilityChanged?.invoke()
+    }
 
     fun selectBrush(settings: BrushSettings): Boolean {
         if (isDrawing || isNavigating) return false
@@ -286,7 +322,6 @@ class RasterSurface(
         val valid = samples.filter { it.x.isFinite() && it.y.isFinite() }
         if (valid.isEmpty()) return null
         val started = StrokePerformance.now()
-        historyTaps.cancel()
         try { history.execute(current, StrokeEdit(valid, capturedBrush)) }
         catch (failure: Throwable) {
             if (!capturedBrush.requiresPreparedGeometry || (failure !is Exception && failure !is LinkageError)) throw failure
@@ -352,6 +387,7 @@ class RasterSurface(
         if (document?.activeLayer?.alphaLocked == true) { historyFeedback?.invoke("Turn off alpha lock before clearing"); return }
         if (!canDraw) { historyFeedback?.invoke("Selected layer is locked or hidden"); return }
         historyTaps.cancel()
+        historyRequests.clear()
         cancelStroke()
         document?.let { history.execute(it, ClearLayerEdit) }
         historyChanged?.invoke()
@@ -362,15 +398,31 @@ class RasterSurface(
     fun redo(): Boolean = changeHistory(true)
 
     private fun changeHistory(redo: Boolean): Boolean {
-        val current = document ?: return false
-        if (isDrawing || isNavigating || !inputEnabled) return false
-        if (if (redo) !history.canRedo else !history.canUndo) return false
+        if (document == null || isNavigating || (!inputEnabled && !historyReopening)) return false
+        if (if (redo) !canRequestRedo else !canRequestUndo) return false
         historyTaps.cancel()
-        viewportWillChange?.invoke()
-        val label = if (redo) history.redo(current) else history.undo(current)
-        render(); historyChanged?.invoke(); layersChanged?.invoke(); ready?.invoke()
-        historyFeedback?.invoke("${if (redo) "Redo" else "Undo"}: $label")
+        historyRequests.addLast(redo)
+        drainHistoryRequests()
+        historyAvailabilityChanged?.invoke()
         return true
+    }
+
+    internal fun drainHistoryRequests() {
+        val current = document ?: return
+        if (historyRequests.isEmpty() || isDrawing || isNavigating || historyCommitPending() ||
+            (!inputEnabled && !historyReopening)) return
+        changingHistory = true
+        try {
+            // Explicit history actions publish now, without the writing quiet gap.
+            historyReopening = true
+            viewportWillChange?.invoke()
+            while (historyRequests.isNotEmpty()) {
+                val redo = historyRequests.removeFirst()
+                val label = (if (redo) history.redo(current) else history.undo(current)) ?: continue
+                historyFeedback?.invoke("${if (redo) "Redo" else "Undo"}: $label")
+            }
+            render(); historyChanged?.invoke(); layersChanged?.invoke(); ready?.invoke()
+        } finally { changingHistory = false }
     }
 
     fun save(file: File): Boolean = document?.exportPng(file) ?: false
@@ -574,8 +626,10 @@ class RasterSurface(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!inputEnabled || document == null) return true
-        if (historyTaps.onTouchEvent(event)) { gestures.cancel(); return true }
-        if (gestures.onTouchEvent(event)) return true
+        if (gesturesEnabled) {
+            if (historyTaps.onTouchEvent(event)) { gestures.cancel(); return true }
+            if (gestures.onTouchEvent(event)) return true
+        }
         if (rawInput || isNavigating || !canDraw) return true
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_CANCEL) { cancelStroke(); return true }
@@ -618,6 +672,7 @@ class RasterSurface(
                 requestFrame()
             }
             performClick()
+            historyInputSettled()
         } else requestFrame()
         return true
     }

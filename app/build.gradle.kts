@@ -14,7 +14,7 @@ android {
         versionCode = 1
         versionName = "0.1-probe"
         if (labBuild) applicationIdSuffix = ".lab"
-        manifestPlaceholders["appLabel"] = if (labBuild) "BOOX Art Lab ($rendererBackend)" else "BOOX Art Probe"
+        manifestPlaceholders["appLabel"] = "Draw in Boox"
         buildConfigField("boolean", "BOOX_LAB", labBuild.toString())
         buildConfigField("String", "RENDERER_BACKEND", "\"$rendererBackend\"")
         testInstrumentationRunner = "art.boox.probe.RasterInstrumentation"
@@ -37,6 +37,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.4.4")
     if (rendererBackend == "recovered") {
         require(rootProject.file(".tools/recovered-renderer/isolated-jni/arm64-v8a/libboox_art_engine.so").isFile) {

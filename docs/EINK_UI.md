@@ -1,5 +1,14 @@
 # E-ink UI conventions
 
+Current navigation layout (`navigation-toolbar-v1`): separate vertical Fit,
+Zoom in/out and Rotate left/right controls accompany the horizontal drawing
+toolbar. The vertical toolbar shows one top grip and the horizontal toolbar one
+left grip. Both move freely in any direction, with hold/pen-hover activation
+and a black outline while grabbed. Both hide in drawing mode. Canvas gestures
+default off; Settings > Gestures > Enable canvas gestures enables navigation and
+the individually selected shortcuts. Earlier default/layout descriptions below
+describe preceding builds.
+
 These conventions guide this app's controls on the monochrome BOOX Go 10.3. They are product decisions informed by the sources below, rather than a claim that every e-ink device behaves alike.
 
 ## Shared icon controls

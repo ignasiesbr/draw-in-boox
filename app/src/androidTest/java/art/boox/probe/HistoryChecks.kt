@@ -26,6 +26,7 @@ object HistoryChecks {
     }
 
     fun run(context: Context) {
+        AsyncHistoryChecks.run()
         val document = DrawingDocument.create(CanvasSpec(260, 260))
         val history = EditHistory()
         val brush = PressureBrush()
@@ -91,7 +92,7 @@ object HistoryChecks {
         for (bitmap in listOf(empty, one, two, filled, cut)) bitmap.recycle()
         document.recycle()
 
-        // Surface lifecycle: navigation is not an edit, busy pen blocks undo, new document resets.
+        // Surface lifecycle: navigation is not an edit, busy pen queues undo, new document resets.
         val testContext = object : ContextWrapper(context) {
             override fun getFilesDir() = File(context.cacheDir, "history-tests").apply { mkdirs() }
         }
@@ -102,9 +103,10 @@ object HistoryChecks {
         view.zoom(ZoomAction.ACTUAL); view.rotateView(37.25f); view.viewport.panBy(10f, 15f)
         val transform = view.viewport.transform
         view.beginRawStroke()
-        check(!view.undo())
+        check(view.undo() && view.history.undoCount == 1)
         view.endRawStroke()
-        check(view.undo() && view.viewport.transform == transform && view.history.redoCount == 1)
+        view.drainHistoryRequests()
+        check(view.viewport.transform == transform && view.history.redoCount == 1)
         check(view.redo() && view.document!!.layer.getPixel(64, 64) == Color.BLACK)
         view.clear()
         check(view.undo() && view.document!!.layer.getPixel(64, 64) == Color.BLACK)
@@ -116,6 +118,45 @@ object HistoryChecks {
         check(!restored.history.canUndo && restored.document!!.layer.getPixel(64, 64) == Color.BLACK)
         view.createDocument(CanvasSpec(64, 64))
         check(!view.history.canUndo && !view.history.canRedo)
+        queuedRequests(view)
         restored.document?.recycle(); view.document?.recycle()
+    }
+
+    private fun queuedRequests(view: RasterSurface) {
+        fun dot(x: Float) = view.commit(listOf(PenSample(x, 20f, 1f, 1)), "test")
+        dot(10f); dot(20f)
+        var pendingList = true
+        view.historyCommitPending = { pendingList }
+        // Contact has ended, but the final SDK list has not arrived: retain both taps.
+        check(view.undo() && view.undo())
+        check(view.history.undoCount == 2)
+        dot(30f)
+        view.drainHistoryRequests()
+        check(view.history.undoCount == 3) { "Undo ran before the SDK commit" }
+        pendingList = false
+        view.viewportWillChange = { view.inputEnabled = false }
+        view.drainHistoryRequests()
+        check(view.history.undoCount == 1 && view.history.redoCount == 2)
+        check(view.document!!.layer.getPixel(10, 20) == Color.BLACK)
+        check(view.document!!.layer.getPixel(30, 20) == Color.TRANSPARENT)
+        // A further toolbar tap during deferred native reopen is still actionable.
+        check(!view.inputEnabled && view.undo() && view.history.undoCount == 0)
+        check(view.redo() && view.redo() && view.history.undoCount == 2)
+        view.inputEnabled = true
+        pendingList = true
+        check(view.undo())
+        view.inputEnabled = false // Focus/file/lifecycle freeze cancels queued work.
+        pendingList = false
+        view.inputEnabled = true
+        view.drainHistoryRequests()
+        check(view.history.undoCount == 2) { "Queued Undo escaped a lifecycle freeze" }
+        pendingList = true
+        check(view.undo())
+        view.createDocument(CanvasSpec(64, 64))
+        dot(40f)
+        pendingList = false
+        view.drainHistoryRequests()
+        check(view.history.undoCount == 1) { "Old Undo changed a replacement document" }
+        view.viewportWillChange = null
     }
 }

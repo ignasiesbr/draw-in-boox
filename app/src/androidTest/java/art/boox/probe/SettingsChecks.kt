@@ -26,6 +26,7 @@ object SettingsChecks {
             check(store.load().undoGestureEnabled && store.load().redoGestureEnabled)
             check(store.load().firmwareCrashGuardEnabled)
             check(!store.load().rotationGestureEnabled)
+            check(!store.load().gesturesEnabled)
             store.save(AppSettings(LayerPanelSide.LEFT))
             check(AppSettingsStore(isolated).load().layerPanelSide == LayerPanelSide.LEFT)
             isolated.getSharedPreferences("", 0).edit().putString("layer_panel_side", "future-value").commit()
@@ -36,7 +37,7 @@ object SettingsChecks {
                 check(AppSettingsStore(isolated).load() == configured)
             }
             for (enabled in listOf(true, false)) {
-                val configured = store.load().copy(rotationGestureEnabled = enabled)
+                val configured = store.load().copy(rotationGestureEnabled = enabled, gesturesEnabled = enabled)
                 store.save(configured)
                 check(AppSettingsStore(isolated).load() == configured)
             }
@@ -75,6 +76,9 @@ object SettingsChecks {
 
             val activity = instrumentation.startActivitySync(android.content.Intent(target, MainActivity::class.java)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Activity startup applies the user's saved guard, which may differ from
+            // the instrumentation process's initial static default.
+            val activityRuntimeGuard = NativePreviewPolicy.firmwareCrashGuardEnabled
             var failure: Throwable? = null
             instrumentation.runOnMainSync {
                 var dialog: AlertDialog? = null
@@ -90,24 +94,29 @@ object SettingsChecks {
                     check(content.findViewWithTag<CheckBox>("Undo gesture").isChecked)
                     check(content.findViewWithTag<CheckBox>("Redo gesture").isChecked)
                     check(!content.findViewWithTag<CheckBox>("Rotation gesture").isChecked)
+                    check(!content.findViewWithTag<CheckBox>("Enable gestures").isChecked)
                     check(content.findViewWithTag<CheckBox>("Firmware crash guard").isChecked)
                     val body = content.findViewWithTag<android.widget.LinearLayout>("Settings content")
                     check(body.indexOfChild(content.findViewWithTag<View>("Advanced settings")) >
                         body.indexOfChild(content.findViewWithTag<View>("Redo gesture")))
                     content.findViewWithTag<CheckBox>("Undo gesture").performClick()
+                    content.findViewWithTag<CheckBox>("Enable gestures").performClick()
                     content.findViewWithTag<CheckBox>("Rotation gesture").performClick()
                     content.findViewWithTag<CheckBox>("Firmware crash guard").performClick()
                     dialog.findViewById<android.view.View>(android.R.id.content)
                         .findViewWithTag<RadioButton>("Layers panel left").performClick()
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
                     check(selected == AppSettings(LayerPanelSide.LEFT, undoGestureEnabled = false,
-                        firmwareCrashGuardEnabled = false, rotationGestureEnabled = true) && dialog.isShowing)
-                    check(NativePreviewPolicy.firmwareCrashGuardEnabled == originalRuntimeGuard)
+                        firmwareCrashGuardEnabled = false, rotationGestureEnabled = true,
+                        gesturesEnabled = true) && dialog.isShowing)
+                    check(NativePreviewPolicy.firmwareCrashGuardEnabled == activityRuntimeGuard)
                     allowApply = true
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
                     check(!dialog.isShowing)
                     selected = null
                     dialog = SettingsDialog.show(activity, AppSettings()) { selected = it; true }
+                    dialog.findViewById<View>(android.R.id.content)
+                        .findViewWithTag<CheckBox>("Enable gestures").performClick()
                     dialog.findViewById<View>(android.R.id.content)
                         .findViewWithTag<CheckBox>("Redo gesture").performClick()
                     dialog.findViewById<View>(android.R.id.content)
@@ -116,13 +125,13 @@ object SettingsChecks {
                         .findViewWithTag<CheckBox>("Firmware crash guard").performClick()
                     dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
                     check(selected == null)
-                    check(NativePreviewPolicy.firmwareCrashGuardEnabled == originalRuntimeGuard)
+                    check(NativePreviewPolicy.firmwareCrashGuardEnabled == activityRuntimeGuard)
                     val root = activity.findViewById<View>(android.R.id.content)
                     val undo = root.findViewWithTag<EinkIconButton>("Undo")
                     val redo = root.findViewWithTag<EinkIconButton>("Redo")
                     check(undo.parent === root.findViewWithTag<View>("brush.eraser").parent && undo.parent === redo.parent)
                     check(!undo.isEnabled && !redo.isEnabled)
-                    val toolbar = root.findViewWithTag<android.widget.LinearLayout>("Floating toolbar")
+                    val toolbar = root.findViewWithTag<FloatingToolbar>("Navigation toolbar").controls
                     val rotateLeft = root.findViewWithTag<EinkIconButton>("Rotate left")
                     val rotateRight = root.findViewWithTag<EinkIconButton>("Rotate right")
                     check(rotateLeft.parent === toolbar && rotateRight.parent === toolbar)
@@ -135,6 +144,7 @@ object SettingsChecks {
                     val realPrefs = target.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
                     val hadGuard = realPrefs.contains("firmware_crash_guard_enabled")
                     val hadRotation = realPrefs.contains("rotation_gesture_enabled")
+                    val hadGestures = realPrefs.contains("gestures_enabled")
                     val surface = root.findViewWithTag<RasterSurface>("Drawing surface")
                     val settingsButton = root.findViewWithTag<EinkIconButton>("Settings")
                     fun settingsWindow() = checkNotNull(android.view.inspector.WindowInspector.getGlobalWindowViews()
@@ -147,11 +157,13 @@ object SettingsChecks {
                             val rotation = if (enabled == saved.firmwareCrashGuardEnabled)
                                 saved.rotationGestureEnabled else !saved.rotationGestureEnabled
                             window.findViewWithTag<CheckBox>("Rotation gesture").isChecked = rotation
+                            window.findViewWithTag<CheckBox>("Enable gestures").isChecked = rotation
                             window.findViewById<android.widget.Button>(android.R.id.button1).performClick()
                             check(realStore.load().firmwareCrashGuardEnabled == enabled) { "Activity Apply did not persist guard=$enabled" }
                             check(NativePreviewPolicy.firmwareCrashGuardEnabled == enabled)
                             check(NativePreviewPolicy.supports(grayMarker) == !enabled)
                             check(realStore.load().rotationGestureEnabled == rotation && surface.rotationGestureEnabled == rotation)
+                            check(realStore.load().gesturesEnabled == rotation && surface.gesturesEnabled == rotation)
                         }
                     } finally {
                         NativePreviewPolicy.configure(saved)
@@ -160,6 +172,8 @@ object SettingsChecks {
                             else edit.remove("firmware_crash_guard_enabled")
                             if (hadRotation) edit.putBoolean("rotation_gesture_enabled", saved.rotationGestureEnabled)
                             else edit.remove("rotation_gesture_enabled")
+                            if (hadGestures) edit.putBoolean("gestures_enabled", saved.gesturesEnabled)
+                            else edit.remove("gestures_enabled")
                         }.commit()
                     }
                 } catch (error: Throwable) { failure = error }

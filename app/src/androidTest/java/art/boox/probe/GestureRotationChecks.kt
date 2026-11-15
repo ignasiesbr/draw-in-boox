@@ -35,6 +35,7 @@ object GestureRotationChecks {
         }
         var strokes = 0
         val view = RasterSurface(testContext, CanvasSpec(512, 512)) { strokes++ }
+        view.configureGestures(true)
         view.surfaceChanged(view.holder, 0, 400, 400)
         view.createDocument(CanvasSpec(512, 512))
         view.rotateView(37.25f)
