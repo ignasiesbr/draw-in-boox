@@ -7,6 +7,23 @@ $workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $env:RUSTUP_HOME = Join-Path $workspace '.tools\rustup'
 $env:CARGO_HOME = Join-Path $workspace '.tools\cargo'
 $env:PATH = "$env:CARGO_HOME\bin;C:\mingw64\bin;$env:PATH"
+# Rust panic locations can embed absolute source paths even in release binaries.
+# Use encoded flags so workspace paths containing spaces remain one argument.
+$nativeRustFlags = @()
+if ($env:CARGO_ENCODED_RUSTFLAGS) {
+    $nativeRustFlags += $env:CARGO_ENCODED_RUSTFLAGS -split [char]31
+} elseif ($env:RUSTFLAGS) {
+    $nativeRustFlags += $env:RUSTFLAGS -split '\s+' | Where-Object { $_ }
+}
+foreach ($sourceRoot in @($workspace, ($workspace -replace '\\', '/'))) {
+    $nativeRustFlags += "--remap-path-prefix=$sourceRoot=/workspace"
+}
+if ($env:USERPROFILE) {
+    foreach ($sourceRoot in @($env:USERPROFILE, ($env:USERPROFILE -replace '\\', '/'))) {
+        $nativeRustFlags += "--remap-path-prefix=$sourceRoot=/home/developer"
+    }
+}
+$env:CARGO_ENCODED_RUSTFLAGS = $nativeRustFlags -join [char]31
 $manifest = Join-Path $workspace 'experimental\boox-renderer\Cargo.toml'
 $cargo = Join-Path $env:CARGO_HOME 'bin\cargo.exe'
 $rustup = Join-Path $env:CARGO_HOME 'bin\rustup.exe'

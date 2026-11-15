@@ -142,7 +142,9 @@ If the NDK is elsewhere, use its installation root:
 ```
 
 Rebuild the native library after changing Rust sources; Gradle does not invoke
-Cargo automatically. See [the renderer README](../experimental/boox-renderer/README.md)
+Cargo automatically. The script remaps local source paths to generic paths in
+compiled Rust diagnostics so APKs do not disclose the developer's home directory.
+See [the renderer README](../experimental/boox-renderer/README.md)
 and [experiment notes](RECOVERED_RENDERER_EXPERIMENT.md) for provenance and the
 firmware boundary. Historical packaging instructions in those notes are superseded
 by their opening update: keep `libboox_art_engine.so` isolated beside the original
